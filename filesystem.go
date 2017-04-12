@@ -227,6 +227,10 @@ func (sfs *sivaFS) TempFile(dir string, prefix string) (billy.File, error) {
 	return nil, billy.ErrNotSupported
 }
 
+func (sfs *sivaFS) Close() error {
+	return sfs.ensureClosed()
+}
+
 func (sfs *sivaFS) ensureOpen() error {
 	if sfs.rw != nil {
 		return nil
