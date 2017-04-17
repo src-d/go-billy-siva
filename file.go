@@ -38,6 +38,10 @@ func openFile(filename string, r *io.SectionReader, l *sync.Mutex) billy.File {
 }
 
 func (f *file) Read(p []byte) (int, error) {
+	if f.Closed {
+		return 0, ErrAlreadyClosed
+	}
+
 	if f.r == nil {
 		return 0, ErrWriteOnlyFile
 	}
@@ -49,6 +53,10 @@ func (f *file) Read(p []byte) (int, error) {
 }
 
 func (f *file) ReadAt(b []byte, off int64) (int, error) {
+	if f.Closed {
+		return 0, ErrAlreadyClosed
+	}
+
 	if f.r == nil {
 		return 0, ErrWriteOnlyFile
 	}
@@ -60,6 +68,10 @@ func (f *file) ReadAt(b []byte, off int64) (int, error) {
 }
 
 func (f *file) Seek(offset int64, whence int) (int64, error) {
+	if f.Closed {
+		return 0, ErrAlreadyClosed
+	}
+
 	if f.r == nil {
 		return 0, ErrNonSeekableFile
 	}
@@ -75,6 +87,10 @@ func (f *file) Seek(offset int64, whence int) (int64, error) {
 }
 
 func (f *file) Write(p []byte) (int, error) {
+	if f.Closed {
+		return 0, ErrAlreadyClosed
+	}
+
 	if f.w == nil {
 		return 0, ErrReadOnlyFile
 	}

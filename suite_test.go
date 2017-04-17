@@ -27,7 +27,7 @@ func (s *FilesystemSuite) SetUpTest(c *C) {
 	c.Assert(f.Close(), IsNil)
 	fs := New(osFs, name)
 	s.cfs = fs
-	s.FilesystemSuite.Fs = fs
+	s.FilesystemSuite.FS = fs
 }
 
 func (s *FilesystemSuite) TestTempFile(c *C) {
@@ -62,7 +62,7 @@ func (s *FilesystemSuite) TestOpenFileReadWrite(c *C) {
 	c.Skip("O_RDWR not supported")
 }
 
-func (s *FilesystemSuite) TestFileCreateReadSeek(c *C) {
+func (s *FilesystemSuite) TestSeekToEndAndWrite(c *C) {
 	c.Skip("does not support seek on writeable files")
 }
 
@@ -81,4 +81,20 @@ func (s *FilesystemSuite) TestMkdirAllIdempotent(c *C) {
 func (s *FilesystemSuite) TestMkdirAllNested(c *C) {
 	c.Skip("because MkdirAll does nothing, is not possible to check the " +
 		"Stat of a directory created with this mehtod")
+}
+
+func (s *FilesystemSuite) TestCreateDir(c *C) {
+	c.Skip("CreateDir always returns no error")
+}
+
+func (s *FilesystemSuite) TestRenameDir(c *C) {
+	c.Skip("Dir renaming not supported")
+}
+
+func (s *FilesystemSuite) TestFileNonRead(c *C) {
+	c.Skip("Is not possible to write a file and then read it at the same time")
+}
+
+func (s *FilesystemSuite) TestFileWrite(c *C) {
+	c.Skip("Open method open a file in write only mode")
 }

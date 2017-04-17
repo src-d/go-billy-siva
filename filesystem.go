@@ -51,8 +51,10 @@ func New(fs billy.Filesystem, path string) billy.Filesystem {
 	}
 }
 
+// Create creates a new file. This file is created using CREATE, TRUNCATE and
+// WRITE ONLY flags due to limitations working on siva files.
 func (sfs *sivaFS) Create(path string) (billy.File, error) {
-	return sfs.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, os.FileMode(0666))
+	return sfs.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, os.FileMode(0666))
 }
 
 func (sfs *sivaFS) Open(path string) (billy.File, error) {
@@ -269,6 +271,10 @@ func (sfs *sivaFS) ensureClosed() error {
 }
 
 func (sfs *sivaFS) createFile(path string, flag int, mode os.FileMode) (billy.File, error) {
+	if flag&os.O_RDWR != 0 || flag&os.O_RDONLY != 0 {
+		return nil, billy.ErrNotSupported
+	}
+
 	header := &siva.Header{
 		Name:    path,
 		Mode:    mode,
