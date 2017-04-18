@@ -76,10 +76,6 @@ func (f *file) Seek(offset int64, whence int) (int64, error) {
 		return 0, ErrNonSeekableFile
 	}
 
-	if f.w != nil {
-		panic("invalid state: both reader and writer are nil")
-	}
-
 	f.l.Lock()
 	defer f.l.Unlock()
 
@@ -105,6 +101,9 @@ func (f *file) Close() error {
 	if f.Closed {
 		return ErrAlreadyClosed
 	}
+
+	f.l.Lock()
+	defer f.l.Unlock()
 
 	defer func() { f.Closed = true }()
 
