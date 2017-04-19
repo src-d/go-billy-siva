@@ -83,8 +83,16 @@ func (s *FilesystemSuite) TestMkdirAllNested(c *C) {
 		"Stat of a directory created with this mehtod")
 }
 
+func (s *FilesystemSuite) TestStatDir(c *C) {
+	c.Skip("StatDir is not possible because directories do not exists in siva")
+}
+
 func (s *FilesystemSuite) TestCreateDir(c *C) {
 	c.Skip("CreateDir always returns no error")
+}
+
+func (s *FilesystemSuite) TestRenameToDir(c *C) {
+	c.Skip("Dir renaming not supported")
 }
 
 func (s *FilesystemSuite) TestRenameDir(c *C) {

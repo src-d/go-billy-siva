@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	. "gopkg.in/check.v1"
+	"gopkg.in/src-d/go-billy.v2"
 	"gopkg.in/src-d/go-billy.v2/osfs"
 )
 
@@ -43,6 +44,120 @@ func (f *Fixture) Path() string {
 
 func (s *SpecificFilesystemSuite) SetUpTest(c *C) {
 	s.tmpDir = c.MkDir()
+}
+
+func (s *SpecificFilesystemSuite) TestOpenClose(c *C) {
+	osFs := osfs.New(s.tmpDir)
+
+	fs := New(osFs, "test.siva")
+	c.Assert(fs, NotNil)
+
+	fsCloser, ok := fs.(io.Closer)
+	c.Assert(ok, Equals, true)
+
+	err := fsCloser.Close()
+	c.Assert(err, IsNil)
+
+	fs = New(osFs, "test.siva")
+	c.Assert(fs, NotNil)
+
+	_, err = fs.Create("testOne.txt")
+	c.Assert(err, IsNil)
+
+	fsCloser, ok = fs.(io.Closer)
+	c.Assert(ok, Equals, true)
+
+	err = fsCloser.Close()
+	c.Assert(err, IsNil)
+}
+
+func (s *SpecificFilesystemSuite) TestOpenFileNotSupported(c *C) {
+	osFs := osfs.New(s.tmpDir)
+
+	fs := New(osFs, "test.siva")
+	c.Assert(fs, NotNil)
+
+	_, err := fs.OpenFile("testFile.txt", stdos.O_CREATE, 0)
+	c.Assert(err, Equals, billy.ErrNotSupported)
+
+	_, err = fs.OpenFile("testFile.txt", stdos.O_CREATE|stdos.O_TRUNC|stdos.O_RDWR, 0)
+	c.Assert(err, Equals, billy.ErrNotSupported)
+
+	_, err = fs.OpenFile("testFile.txt", stdos.O_RDWR, 0)
+	c.Assert(err, Equals, billy.ErrNotSupported)
+	_, err = fs.OpenFile("testFile.txt", stdos.O_WRONLY, 0)
+	c.Assert(err, Equals, billy.ErrNotSupported)
+}
+
+func (s *SpecificFilesystemSuite) TestFileReadWriteErrors(c *C) {
+	osFs := osfs.New(s.tmpDir)
+
+	fs := New(osFs, "test.siva")
+	c.Assert(fs, NotNil)
+
+	f, err := fs.Create("testFile.txt")
+	c.Assert(err, IsNil)
+
+	_, err = f.Read(nil)
+	c.Assert(err, Equals, ErrWriteOnlyFile)
+
+	_, err = f.Seek(0, 0)
+	c.Assert(err, Equals, ErrNonSeekableFile)
+
+	fr, ok := f.(io.ReaderAt)
+	c.Assert(ok, Equals, true)
+	_, err = fr.ReadAt(nil, 0)
+	c.Assert(err, Equals, ErrWriteOnlyFile)
+}
+
+func (s *SpecificFilesystemSuite) TestFileClosedErrors(c *C) {
+	osFs := osfs.New(s.tmpDir)
+
+	fs := New(osFs, "test.siva")
+	c.Assert(fs, NotNil)
+
+	f, err := fs.Create("testFile.txt")
+	c.Assert(err, IsNil)
+	err = f.Close()
+	c.Assert(err, IsNil)
+
+	_, err = f.Read(nil)
+	c.Assert(err, Equals, ErrAlreadyClosed)
+
+	_, err = f.Seek(0, 0)
+	c.Assert(err, Equals, ErrAlreadyClosed)
+
+	_, err = f.Write(nil)
+	c.Assert(err, Equals, ErrAlreadyClosed)
+
+	fr, ok := f.(io.ReaderAt)
+	c.Assert(ok, Equals, true)
+	_, err = fr.ReadAt(nil, 0)
+	c.Assert(err, Equals, ErrAlreadyClosed)
+
+	err = f.Close()
+	c.Assert(err, Equals, ErrAlreadyClosed)
+}
+
+func (s *SpecificFilesystemSuite) TestFileOperations(c *C) {
+	osFs := osfs.New(s.tmpDir)
+
+	fs := New(osFs, "test.siva")
+	c.Assert(fs, NotNil)
+
+	f1, err := fs.Create("testOne.txt")
+	c.Assert(err, IsNil)
+	_, err = fs.Create("testTwo.txt")
+	c.Assert(err, Equals, ErrFileWriteModeAlreadyOpen)
+
+	err = f1.Close()
+	c.Assert(err, IsNil)
+
+	_, err = fs.Create("testTree.txt")
+	c.Assert(err, IsNil)
+
+	f1, err = fs.Open("testOne.txt")
+	c.Assert(err, IsNil)
 }
 
 func (s *SpecificFilesystemSuite) TestReadFs(c *C) {

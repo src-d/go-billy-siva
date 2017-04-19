@@ -7,7 +7,6 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -21,10 +20,11 @@ const (
 )
 
 var (
-	ErrNonSeekableFile = errors.New("file non-seekable")
-	ErrAlreadyClosed   = errors.New("file was already closed")
-	ErrReadOnlyFile    = errors.New("file is read-only")
-	ErrWriteOnlyFile   = errors.New("file is write-only")
+	ErrNonSeekableFile          = errors.New("file non-seekable")
+	ErrAlreadyClosed            = errors.New("file was already closed")
+	ErrFileWriteModeAlreadyOpen = errors.New("previous file in write mode already open")
+	ErrReadOnlyFile             = errors.New("file is read-only")
+	ErrWriteOnlyFile            = errors.New("file is write-only")
 )
 
 type sivaFS struct {
@@ -32,7 +32,8 @@ type sivaFS struct {
 	path       string
 	f          billy.File
 	rw         *siva.ReadWriter
-	lock       *sync.Mutex
+
+	fileWriteModeOpen bool
 }
 
 // New creates a new filesystem backed by a siva file with the given path in
@@ -47,7 +48,6 @@ func New(fs billy.Filesystem, path string) billy.Filesystem {
 	return &sivaFS{
 		underlying: fs,
 		path:       path,
-		lock:       &sync.Mutex{},
 	}
 }
 
@@ -67,14 +67,15 @@ func (sfs *sivaFS) OpenFile(path string, flag int, mode os.FileMode) (billy.File
 		return nil, billy.ErrNotSupported
 	}
 
-	sfs.lock.Lock()
-	defer sfs.lock.Unlock()
-
 	if err := sfs.ensureOpen(); err != nil {
 		return nil, err
 	}
 
 	if flag&os.O_CREATE != 0 {
+		if sfs.fileWriteModeOpen {
+			return nil, ErrFileWriteModeAlreadyOpen
+		}
+
 		return sfs.createFile(path, flag, mode)
 	}
 
@@ -83,9 +84,6 @@ func (sfs *sivaFS) OpenFile(path string, flag int, mode os.FileMode) (billy.File
 
 func (sfs *sivaFS) Stat(p string) (billy.FileInfo, error) {
 	p = normalizePath(p)
-
-	sfs.lock.Lock()
-	defer sfs.lock.Unlock()
 
 	if err := sfs.ensureOpen(); err != nil {
 		return nil, err
@@ -116,9 +114,6 @@ func (sfs *sivaFS) Stat(p string) (billy.FileInfo, error) {
 func (sfs *sivaFS) ReadDir(path string) ([]billy.FileInfo, error) {
 	path = normalizePath(path)
 
-	sfs.lock.Lock()
-	defer sfs.lock.Unlock()
-
 	if err := sfs.ensureOpen(); err != nil {
 		return nil, err
 	}
@@ -142,9 +137,6 @@ func (sfs *sivaFS) ReadDir(path string) ([]billy.FileInfo, error) {
 }
 
 func (sfs *sivaFS) MkdirAll(filename string, perm os.FileMode) error {
-	sfs.lock.Lock()
-	defer sfs.lock.Unlock()
-
 	if err := sfs.ensureOpen(); err != nil {
 		return err
 	}
@@ -180,9 +172,6 @@ func (sfs *sivaFS) Base() string {
 
 func (sfs *sivaFS) Remove(path string) error {
 	path = normalizePath(path)
-
-	sfs.lock.Lock()
-	defer sfs.lock.Unlock()
 
 	if err := sfs.ensureOpen(); err != nil {
 		return err
@@ -286,10 +275,15 @@ func (sfs *sivaFS) createFile(path string, flag int, mode os.FileMode) (billy.Fi
 	}
 
 	closeFunc := func() error {
+		if flag&os.O_WRONLY != 0 || flag&os.O_RDWR != 0 {
+			sfs.fileWriteModeOpen = false
+		}
+
 		return sfs.rw.Flush()
 	}
 
-	return newFile(path, sfs.rw, sfs.lock, closeFunc), nil
+	defer func() { sfs.fileWriteModeOpen = true }()
+	return newFile(path, sfs.rw, closeFunc), nil
 }
 
 func (sfs *sivaFS) openFile(path string, flag int, mode os.FileMode) (billy.File, error) {
@@ -312,7 +306,7 @@ func (sfs *sivaFS) openFile(path string, flag int, mode os.FileMode) (billy.File
 		return nil, err
 	}
 
-	return openFile(path, sr, sfs.lock), nil
+	return openFile(path, sr), nil
 }
 
 func (sfs *sivaFS) getIndex() (siva.Index, error) {
