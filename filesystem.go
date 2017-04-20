@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"gopkg.in/src-d/go-billy.v2"
-	"gopkg.in/src-d/go-billy.v2/subdir"
+	"gopkg.in/src-d/go-billy.v2/subdirfs"
 	"gopkg.in/src-d/go-siva.v1"
 )
 
@@ -163,7 +163,7 @@ func (sfs *sivaFS) Join(elem ...string) string {
 }
 
 func (sfs *sivaFS) Dir(path string) billy.Filesystem {
-	return subdir.New(sfs, sfs.Join(sfs.Base(), path))
+	return subdirfs.New(sfs, sfs.Join(sfs.Base(), path))
 }
 
 func (sfs *sivaFS) Base() string {
