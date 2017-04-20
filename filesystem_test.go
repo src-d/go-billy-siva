@@ -46,29 +46,37 @@ func (s *SpecificFilesystemSuite) SetUpTest(c *C) {
 	s.tmpDir = c.MkDir()
 }
 
-func (s *SpecificFilesystemSuite) TestOpenClose(c *C) {
+func (s *SpecificFilesystemSuite) TestSync(c *C) {
 	osFs := osfs.New(s.tmpDir)
 
 	fs := New(osFs, "test.siva")
 	c.Assert(fs, NotNil)
 
-	fsCloser, ok := fs.(io.Closer)
+	fsSync, ok := fs.(Syncer)
 	c.Assert(ok, Equals, true)
 
-	err := fsCloser.Close()
+	err := fsSync.Sync()
 	c.Assert(err, IsNil)
 
 	fs = New(osFs, "test.siva")
 	c.Assert(fs, NotNil)
 
-	_, err = fs.Create("testOne.txt")
+	f1, err := fs.Create("testOne.txt")
 	c.Assert(err, IsNil)
 
-	fsCloser, ok = fs.(io.Closer)
+	fsSync, ok = fs.(Syncer)
 	c.Assert(ok, Equals, true)
 
-	err = fsCloser.Close()
+	err = fsSync.Sync()
 	c.Assert(err, IsNil)
+
+	n, err := f1.Write([]byte("TEST"))
+	c.Assert(err, NotNil)
+	c.Assert(n, Equals, 0)
+
+	f2, err := fs.Open("testOne.txt")
+	c.Assert(err, IsNil)
+	c.Assert(f2, NotNil)
 }
 
 func (s *SpecificFilesystemSuite) TestOpenFileNotSupported(c *C) {

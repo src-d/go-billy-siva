@@ -218,7 +218,7 @@ func (sfs *sivaFS) TempFile(dir string, prefix string) (billy.File, error) {
 	return nil, billy.ErrNotSupported
 }
 
-func (sfs *sivaFS) Close() error {
+func (sfs *sivaFS) Sync() error {
 	return sfs.ensureClosed()
 }
 
