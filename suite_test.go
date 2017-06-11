@@ -106,3 +106,58 @@ func (s *FilesystemSuite) TestFileNonRead(c *C) {
 func (s *FilesystemSuite) TestFileWrite(c *C) {
 	c.Skip("Open method open a file in write only mode")
 }
+
+func (s *FilesystemSuite) TestReadlinkWithAbsolutePath(c *C) {
+	c.Skip("Symlink method is not supported")
+}
+
+func (s *FilesystemSuite) TestSymlinkRename(c *C) {
+	c.Skip("Symlink method is not supported")
+}
+
+func (s *FilesystemSuite) TestSymlinkReadDir(c *C) {
+	c.Skip("Symlink method is not supported")
+}
+
+func (s *FilesystemSuite) TestSymlinkToDir(c *C) {
+	c.Skip("Symlink method is not supported")
+}
+
+func (s *FilesystemSuite) TestSymlinkWithNonExistentOldname(c *C) {
+	c.Skip("Symlink method is not supported")
+}
+func (s *FilesystemSuite) TestSymlinkCrossDirs(c *C) {
+	c.Skip("Symlink method is not supported")
+}
+
+func (s *FilesystemSuite) TestSymlinkLinkToLink(c *C) {
+	c.Skip("Symlink method is not supported")
+}
+
+func (s *FilesystemSuite) TestSymlinkRemove(c *C) {
+	c.Skip("Symlink method is not supported")
+}
+
+func (s *FilesystemSuite) TestSymlinkOpenWithRelativePath(c *C) {
+	c.Skip("Symlink method is not supported")
+}
+
+func (s *FilesystemSuite) TestSymlinkOpenWithAbsolutePath(c *C) {
+	c.Skip("Symlink method is not supported")
+}
+
+func (s *FilesystemSuite) TestReadlinkWithRelativePath(c *C) {
+	c.Skip("Symlink method is not supported")
+}
+
+func (s *FilesystemSuite) TestSymlinkBasic(c *C) {
+	c.Skip("Symlink method is not supported")
+}
+
+func (s *FilesystemSuite) TestReadlinkWithNonExistentLink(c *C) {
+	c.Skip("Readlink method is not supported")
+}
+
+func (s *FilesystemSuite) TestReadlinkWithNonExistentOldname(c *C) {
+	c.Skip("Readlink method is not supported")
+}

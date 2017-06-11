@@ -218,6 +218,14 @@ func (sfs *sivaFS) TempFile(dir string, prefix string) (billy.File, error) {
 	return nil, billy.ErrNotSupported
 }
 
+func (sfs *sivaFS) Symlink(target, link string) error {
+	return billy.ErrNotSupported
+}
+
+func (sfs *sivaFS) Readlink(link string) (string, error) {
+	return "", billy.ErrNotSupported
+}
+
 func (sfs *sivaFS) Sync() error {
 	return sfs.ensureClosed()
 }
