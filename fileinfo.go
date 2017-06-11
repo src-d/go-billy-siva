@@ -37,7 +37,7 @@ func (f *fileInfo) IsDir() bool {
 }
 
 func (f *fileInfo) Sys() interface{} {
-	return nil
+	return f.e
 }
 
 type dirFileInfo struct {
@@ -71,4 +71,15 @@ func (f *dirFileInfo) IsDir() bool {
 
 func (f *dirFileInfo) Sys() interface{} {
 	return nil
+}
+
+func changeFileInfoName(fi os.FileInfo, name string) os.FileInfo {
+	switch fi := fi.(type) {
+	case *dirFileInfo:
+		fi.path = name
+	case *fileInfo:
+		fi.e.Name = name
+	}
+
+	return fi
 }

@@ -2,7 +2,7 @@ package sivafs
 
 import (
 	"io/ioutil"
-	stdos "os"
+	"os"
 
 	. "gopkg.in/check.v1"
 	"gopkg.in/src-d/go-billy.v2"
@@ -12,21 +12,22 @@ import (
 
 type FilesystemSuite struct {
 	test.FilesystemSuite
-	cfs  billy.Filesystem
+	FS   billy.Filesystem
 	path string
 }
 
 var _ = Suite(&FilesystemSuite{})
 
 func (s *FilesystemSuite) SetUpTest(c *C) {
-	s.path, _ = ioutil.TempDir(stdos.TempDir(), "go-git-fs-test")
+	s.path, _ = ioutil.TempDir(os.TempDir(), "go-git-fs-test")
 	osFs := osfs.New(s.path)
 	f, err := osFs.TempFile("", "siva-fs")
 	c.Assert(err, IsNil)
 	name := f.Filename()
 	c.Assert(f.Close(), IsNil)
 	fs := New(osFs, name)
-	s.cfs = fs
+
+	s.FS = fs
 	s.FilesystemSuite.FS = fs
 }
 
@@ -105,4 +106,22 @@ func (s *FilesystemSuite) TestFileNonRead(c *C) {
 
 func (s *FilesystemSuite) TestFileWrite(c *C) {
 	c.Skip("Open method open a file in write only mode")
+}
+
+func (s *FilesystemSuite) TestSymlinkToDir(c *C) {
+	err := billy.WriteFile(s.FS, "dir/file", nil, 0644)
+	c.Assert(err, IsNil)
+
+	err = s.FS.Symlink("dir", "link")
+	c.Assert(err, IsNil)
+
+	fi, err := s.FS.Stat("link")
+	c.Assert(err, IsNil)
+	c.Assert(fi.Name(), Equals, "link")
+	c.Assert(fi.Mode()&os.ModeSymlink, Not(Equals), 0)
+	c.Assert(fi.IsDir(), Equals, true)
+}
+
+func (s FilesystemSuite) TestSymlinkRename(c *C) {
+	c.Skip("Rename not supported")
 }
