@@ -10,8 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"gopkg.in/src-d/go-billy.v2"
-	"gopkg.in/src-d/go-billy.v2/subdirfs"
+	"gopkg.in/src-d/go-billy.v3"
 	"gopkg.in/src-d/go-siva.v1"
 )
 
@@ -26,6 +25,16 @@ var (
 	ErrReadOnlyFile             = errors.New("file is read-only")
 	ErrWriteOnlyFile            = errors.New("file is write-only")
 )
+
+type SivaFS interface {
+	billy.Basic
+	billy.Dir
+
+	// Sync closes any open files, this method should be called at the end of
+	// program to ensure that all the files are properly closed, otherwise the
+	// siva file will be corrupted.
+	Sync() error
+}
 
 type sivaFS struct {
 	underlying billy.Filesystem
@@ -42,9 +51,7 @@ type sivaFS struct {
 //
 // All files opened in write mode must be closed, otherwise the siva file will
 // be corrupted.
-//
-// TempFile is not supported. tmpoverlay should be used if TempFile is needed.
-func New(fs billy.Filesystem, path string) billy.Filesystem {
+func New(fs billy.Filesystem, path string) SivaFS {
 	return &sivaFS{
 		underlying: fs,
 		path:       path,
@@ -53,43 +60,43 @@ func New(fs billy.Filesystem, path string) billy.Filesystem {
 
 // Create creates a new file. This file is created using CREATE, TRUNCATE and
 // WRITE ONLY flags due to limitations working on siva files.
-func (sfs *sivaFS) Create(path string) (billy.File, error) {
-	return sfs.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, os.FileMode(0666))
+func (fs *sivaFS) Create(path string) (billy.File, error) {
+	return fs.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, os.FileMode(0666))
 }
 
-func (sfs *sivaFS) Open(path string) (billy.File, error) {
-	return sfs.OpenFile(path, os.O_RDONLY, 0)
+func (fs *sivaFS) Open(path string) (billy.File, error) {
+	return fs.OpenFile(path, os.O_RDONLY, 0)
 }
 
-func (sfs *sivaFS) OpenFile(path string, flag int, mode os.FileMode) (billy.File, error) {
+func (fs *sivaFS) OpenFile(path string, flag int, mode os.FileMode) (billy.File, error) {
 	path = normalizePath(path)
 	if flag&os.O_CREATE != 0 && flag&os.O_TRUNC == 0 {
 		return nil, billy.ErrNotSupported
 	}
 
-	if err := sfs.ensureOpen(); err != nil {
+	if err := fs.ensureOpen(); err != nil {
 		return nil, err
 	}
 
 	if flag&os.O_CREATE != 0 {
-		if sfs.fileWriteModeOpen {
+		if fs.fileWriteModeOpen {
 			return nil, ErrFileWriteModeAlreadyOpen
 		}
 
-		return sfs.createFile(path, flag, mode)
+		return fs.createFile(path, flag, mode)
 	}
 
-	return sfs.openFile(path, flag, mode)
+	return fs.openFile(path, flag, mode)
 }
 
-func (sfs *sivaFS) Stat(p string) (billy.FileInfo, error) {
+func (fs *sivaFS) Stat(p string) (os.FileInfo, error) {
 	p = normalizePath(p)
 
-	if err := sfs.ensureOpen(); err != nil {
+	if err := fs.ensureOpen(); err != nil {
 		return nil, err
 	}
 
-	index, err := sfs.getIndex()
+	index, err := fs.getIndex()
 	if err != nil {
 		return nil, err
 	}
@@ -111,14 +118,14 @@ func (sfs *sivaFS) Stat(p string) (billy.FileInfo, error) {
 	return stat, nil
 }
 
-func (sfs *sivaFS) ReadDir(path string) ([]billy.FileInfo, error) {
+func (fs *sivaFS) ReadDir(path string) ([]os.FileInfo, error) {
 	path = normalizePath(path)
 
-	if err := sfs.ensureOpen(); err != nil {
+	if err := fs.ensureOpen(); err != nil {
 		return nil, err
 	}
 
-	index, err := sfs.getIndex()
+	index, err := fs.getIndex()
 	if err != nil {
 		return nil, err
 	}
@@ -136,12 +143,12 @@ func (sfs *sivaFS) ReadDir(path string) ([]billy.FileInfo, error) {
 	return append(dirs, files...), nil
 }
 
-func (sfs *sivaFS) MkdirAll(filename string, perm os.FileMode) error {
-	if err := sfs.ensureOpen(); err != nil {
+func (fs *sivaFS) MkdirAll(filename string, perm os.FileMode) error {
+	if err := fs.ensureOpen(); err != nil {
 		return err
 	}
 
-	index, err := sfs.getIndex()
+	index, err := fs.getIndex()
 	if err != nil {
 		return err
 	}
@@ -158,26 +165,18 @@ func (sfs *sivaFS) MkdirAll(filename string, perm os.FileMode) error {
 }
 
 // Join joins the specified elements using the filesystem separator.
-func (sfs *sivaFS) Join(elem ...string) string {
+func (fs *sivaFS) Join(elem ...string) string {
 	return filepath.Join(elem...)
 }
 
-func (sfs *sivaFS) Dir(path string) billy.Filesystem {
-	return subdirfs.New(sfs, sfs.Join(sfs.Base(), path))
-}
-
-func (sfs *sivaFS) Base() string {
-	return defaultBase
-}
-
-func (sfs *sivaFS) Remove(path string) error {
+func (fs *sivaFS) Remove(path string) error {
 	path = normalizePath(path)
 
-	if err := sfs.ensureOpen(); err != nil {
+	if err := fs.ensureOpen(); err != nil {
 		return err
 	}
 
-	index, err := sfs.getIndex()
+	index, err := fs.getIndex()
 	if err != nil {
 		return err
 	}
@@ -185,7 +184,7 @@ func (sfs *sivaFS) Remove(path string) error {
 	e := index.Find(path)
 
 	if e != nil {
-		return sfs.rw.WriteHeader(&siva.Header{
+		return fs.rw.WriteHeader(&siva.Header{
 			Name:    path,
 			ModTime: time.Now(),
 			Mode:    0,
@@ -210,24 +209,20 @@ func (sfs *sivaFS) Remove(path string) error {
 	return os.ErrNotExist
 }
 
-func (sfs *sivaFS) Rename(from, to string) error {
+func (fs *sivaFS) Rename(from, to string) error {
 	return billy.ErrNotSupported
 }
 
-func (sfs *sivaFS) TempFile(dir string, prefix string) (billy.File, error) {
-	return nil, billy.ErrNotSupported
+func (fs *sivaFS) Sync() error {
+	return fs.ensureClosed()
 }
 
-func (sfs *sivaFS) Sync() error {
-	return sfs.ensureClosed()
-}
-
-func (sfs *sivaFS) ensureOpen() error {
-	if sfs.rw != nil {
+func (fs *sivaFS) ensureOpen() error {
+	if fs.rw != nil {
 		return nil
 	}
 
-	f, err := sfs.underlying.OpenFile(sfs.path, os.O_CREATE|os.O_RDWR, 0666)
+	f, err := fs.underlying.OpenFile(fs.path, os.O_CREATE|os.O_RDWR, 0666)
 	if err != nil {
 		return err
 	}
@@ -238,28 +233,28 @@ func (sfs *sivaFS) ensureOpen() error {
 		return err
 	}
 
-	sfs.rw = rw
-	sfs.f = f
+	fs.rw = rw
+	fs.f = f
 	return nil
 }
 
-func (sfs *sivaFS) ensureClosed() error {
-	if sfs.rw == nil {
+func (fs *sivaFS) ensureClosed() error {
+	if fs.rw == nil {
 		return nil
 	}
 
-	err := sfs.rw.Close()
-	if err != nil {
+	if err := fs.rw.Close(); err != nil {
 		return err
 	}
 
-	sfs.rw = nil
-	f := sfs.f
-	sfs.f = nil
+	fs.rw = nil
+
+	f := fs.f
+	fs.f = nil
 	return f.Close()
 }
 
-func (sfs *sivaFS) createFile(path string, flag int, mode os.FileMode) (billy.File, error) {
+func (fs *sivaFS) createFile(path string, flag int, mode os.FileMode) (billy.File, error) {
 	if flag&os.O_RDWR != 0 || flag&os.O_RDONLY != 0 {
 		return nil, billy.ErrNotSupported
 	}
@@ -269,29 +264,33 @@ func (sfs *sivaFS) createFile(path string, flag int, mode os.FileMode) (billy.Fi
 		Mode:    mode,
 		ModTime: time.Now(),
 	}
-	err := sfs.rw.WriteHeader(header)
-	if err != nil {
+
+	if err := fs.rw.WriteHeader(header); err != nil {
 		return nil, err
 	}
 
 	closeFunc := func() error {
-		if flag&os.O_WRONLY != 0 || flag&os.O_RDWR != 0 {
-			sfs.fileWriteModeOpen = false
+		if fs.rw == nil {
+			return nil
 		}
 
-		return sfs.rw.Flush()
+		if flag&os.O_WRONLY != 0 || flag&os.O_RDWR != 0 {
+			fs.fileWriteModeOpen = false
+		}
+
+		return fs.rw.Flush()
 	}
 
-	defer func() { sfs.fileWriteModeOpen = true }()
-	return newFile(path, sfs.rw, closeFunc), nil
+	defer func() { fs.fileWriteModeOpen = true }()
+	return newFile(path, fs.rw, closeFunc), nil
 }
 
-func (sfs *sivaFS) openFile(path string, flag int, mode os.FileMode) (billy.File, error) {
+func (fs *sivaFS) openFile(path string, flag int, mode os.FileMode) (billy.File, error) {
 	if flag&os.O_RDWR != 0 || flag&os.O_WRONLY != 0 {
 		return nil, billy.ErrNotSupported
 	}
 
-	index, err := sfs.getIndex()
+	index, err := fs.getIndex()
 	if err != nil {
 		return nil, err
 	}
@@ -301,7 +300,7 @@ func (sfs *sivaFS) openFile(path string, flag int, mode os.FileMode) (billy.File
 		return nil, os.ErrNotExist
 	}
 
-	sr, err := sfs.rw.Get(e)
+	sr, err := fs.rw.Get(e)
 	if err != nil {
 		return nil, err
 	}
@@ -309,8 +308,8 @@ func (sfs *sivaFS) openFile(path string, flag int, mode os.FileMode) (billy.File
 	return openFile(path, sr), nil
 }
 
-func (sfs *sivaFS) getIndex() (siva.Index, error) {
-	index, err := sfs.rw.Index()
+func (fs *sivaFS) getIndex() (siva.Index, error) {
+	index, err := fs.rw.Index()
 	if err != nil {
 		return nil, err
 	}
@@ -318,7 +317,7 @@ func (sfs *sivaFS) getIndex() (siva.Index, error) {
 	return index.Filter(), nil
 }
 
-func listFiles(index siva.Index, dir string) ([]billy.FileInfo, error) {
+func listFiles(index siva.Index, dir string) ([]os.FileInfo, error) {
 	dir = addTrailingSlash(dir)
 
 	entries, err := index.Glob(fmt.Sprintf("%s*", dir))
@@ -326,7 +325,7 @@ func listFiles(index siva.Index, dir string) ([]billy.FileInfo, error) {
 		return nil, err
 	}
 
-	contents := []billy.FileInfo{}
+	contents := []os.FileInfo{}
 	for _, e := range entries {
 		contents = append(contents, newFileInfo(e))
 	}
@@ -334,7 +333,7 @@ func listFiles(index siva.Index, dir string) ([]billy.FileInfo, error) {
 	return contents, nil
 }
 
-func getDir(index siva.Index, dir string) (billy.FileInfo, error) {
+func getDir(index siva.Index, dir string) (os.FileInfo, error) {
 	dir = addTrailingSlash(dir)
 
 	entries, err := index.Glob(path.Join(dir, "*"))
@@ -356,7 +355,7 @@ func getDir(index siva.Index, dir string) (billy.FileInfo, error) {
 	return newDirFileInfo(path.Clean(dir), oldDir), nil
 }
 
-func listDirs(index siva.Index, dir string) ([]billy.FileInfo, error) {
+func listDirs(index siva.Index, dir string) ([]os.FileInfo, error) {
 	dir = addTrailingSlash(dir)
 
 	entries, err := index.Glob(fmt.Sprintf("%s*/*", dir))
@@ -373,7 +372,7 @@ func listDirs(index siva.Index, dir string) ([]billy.FileInfo, error) {
 		}
 	}
 
-	contents := []billy.FileInfo{}
+	contents := []os.FileInfo{}
 	for dir, mt := range dirs {
 		contents = append(contents, newDirFileInfo(dir, mt))
 	}

@@ -3,107 +3,91 @@ package sivafs
 import (
 	"io"
 	"io/ioutil"
-	stdos "os"
+	"os"
 	"path/filepath"
 	"testing"
 
 	. "gopkg.in/check.v1"
-	"gopkg.in/src-d/go-billy.v2"
-	"gopkg.in/src-d/go-billy.v2/osfs"
+	"gopkg.in/src-d/go-billy.v3"
+	"gopkg.in/src-d/go-billy.v3/helper/polyfill"
+	"gopkg.in/src-d/go-billy.v3/osfs"
+	"gopkg.in/src-d/go-billy.v3/test"
 )
 
 func Test(t *testing.T) { TestingT(t) }
 
-type SpecificFilesystemSuite struct {
-	tmpDir string
+type FilesystemSuite struct {
+	test.BasicSuite
+	test.DirSuite
+
+	FS SivaFS
 }
 
-var _ = Suite(&SpecificFilesystemSuite{})
+var _ = Suite(&FilesystemSuite{})
 
-type Fixture struct {
-	name     string
-	contents []string
-}
+func (s *FilesystemSuite) SetUpTest(c *C) {
+	fs := osfs.New(c.MkDir())
 
-const fixturesPath = "fixtures"
-
-var fixtures = []*Fixture{
-	{
-		name: "basic.siva",
-		contents: []string{
-			"gopher.txt",
-			"readme.txt",
-			"todo.txt",
-		},
-	},
-}
-
-func (f *Fixture) Path() string {
-	return filepath.Join(fixturesPath, f.name)
-}
-
-func (s *SpecificFilesystemSuite) SetUpTest(c *C) {
-	s.tmpDir = c.MkDir()
-}
-
-func (s *SpecificFilesystemSuite) TestSync(c *C) {
-	osFs := osfs.New(s.tmpDir)
-
-	fs := New(osFs, "test.siva")
-	c.Assert(fs, NotNil)
-
-	fsSync, ok := fs.(Syncer)
-	c.Assert(ok, Equals, true)
-
-	err := fsSync.Sync()
+	f, err := fs.TempFile("", "siva-fs")
+	c.Assert(err, IsNil)
+	err = f.Close()
 	c.Assert(err, IsNil)
 
-	fs = New(osFs, "test.siva")
-	c.Assert(fs, NotNil)
+	s.FS = New(fs, f.Name())
+	s.BasicSuite.FS = polyfill.New(s.FS)
+	s.DirSuite.FS = polyfill.New(s.FS)
+}
 
-	f1, err := fs.Create("testOne.txt")
+func (s *FilesystemSuite) TestSync(c *C) {
+	err := s.FS.Sync()
+	c.Assert(err, IsNil)
+}
+
+func (s *FilesystemSuite) TestSyncWithOpenFile(c *C) {
+	err := s.FS.Sync()
 	c.Assert(err, IsNil)
 
-	fsSync, ok = fs.(Syncer)
-	c.Assert(ok, Equals, true)
-
-	err = fsSync.Sync()
+	f, err := s.FS.Create("testOne.txt")
 	c.Assert(err, IsNil)
 
-	n, err := f1.Write([]byte("TEST"))
-	c.Assert(err, NotNil)
+	n, err := f.Write([]byte("qux"))
+	c.Assert(err, IsNil)
+	c.Assert(n, Equals, 3)
+
+	err = s.FS.Sync()
+	c.Assert(err, IsNil)
+
+	n, err = f.Write([]byte("bar"))
+	c.Assert(err.(*os.PathError).Err, Equals, os.ErrClosed)
 	c.Assert(n, Equals, 0)
 
-	f2, err := fs.Open("testOne.txt")
+	err = f.Close()
 	c.Assert(err, IsNil)
-	c.Assert(f2, NotNil)
+
+	f, err = s.FS.Open("testOne.txt")
+	c.Assert(err, IsNil)
+	c.Assert(f, NotNil)
+
+	bytes, err := ioutil.ReadAll(f)
+	c.Assert(err, IsNil)
+	c.Assert(string(bytes), Equals, "qux")
 }
 
-func (s *SpecificFilesystemSuite) TestOpenFileNotSupported(c *C) {
-	osFs := osfs.New(s.tmpDir)
-
-	fs := New(osFs, "test.siva")
-	c.Assert(fs, NotNil)
-
-	_, err := fs.OpenFile("testFile.txt", stdos.O_CREATE, 0)
+func (s *FilesystemSuite) TestOpenFileNotSupported(c *C) {
+	_, err := s.FS.OpenFile("testFile.txt", os.O_CREATE, 0)
 	c.Assert(err, Equals, billy.ErrNotSupported)
 
-	_, err = fs.OpenFile("testFile.txt", stdos.O_CREATE|stdos.O_TRUNC|stdos.O_RDWR, 0)
+	_, err = s.FS.OpenFile("testFile.txt", os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0)
 	c.Assert(err, Equals, billy.ErrNotSupported)
 
-	_, err = fs.OpenFile("testFile.txt", stdos.O_RDWR, 0)
+	_, err = s.FS.OpenFile("testFile.txt", os.O_RDWR, 0)
 	c.Assert(err, Equals, billy.ErrNotSupported)
-	_, err = fs.OpenFile("testFile.txt", stdos.O_WRONLY, 0)
+	_, err = s.FS.OpenFile("testFile.txt", os.O_WRONLY, 0)
 	c.Assert(err, Equals, billy.ErrNotSupported)
 }
 
-func (s *SpecificFilesystemSuite) TestFileReadWriteErrors(c *C) {
-	osFs := osfs.New(s.tmpDir)
-
-	fs := New(osFs, "test.siva")
-	c.Assert(fs, NotNil)
-
-	f, err := fs.Create("testFile.txt")
+func (s *FilesystemSuite) TestFileReadWriteErrors(c *C) {
+	f, err := s.FS.Create("testFile.txt")
 	c.Assert(err, IsNil)
 
 	_, err = f.Read(nil)
@@ -118,103 +102,96 @@ func (s *SpecificFilesystemSuite) TestFileReadWriteErrors(c *C) {
 	c.Assert(err, Equals, ErrWriteOnlyFile)
 }
 
-func (s *SpecificFilesystemSuite) TestFileClosedErrors(c *C) {
-	osFs := osfs.New(s.tmpDir)
-
-	fs := New(osFs, "test.siva")
-	c.Assert(fs, NotNil)
-
-	f, err := fs.Create("testFile.txt")
+func (s *FilesystemSuite) TestFileClosedErrors(c *C) {
+	f, err := s.FS.Create("testFile.txt")
 	c.Assert(err, IsNil)
 	err = f.Close()
 	c.Assert(err, IsNil)
 
 	_, err = f.Read(nil)
-	c.Assert(err, Equals, ErrAlreadyClosed)
+	c.Assert(err, Equals, os.ErrClosed)
 
 	_, err = f.Seek(0, 0)
-	c.Assert(err, Equals, ErrAlreadyClosed)
+	c.Assert(err, Equals, os.ErrClosed)
 
 	_, err = f.Write(nil)
-	c.Assert(err, Equals, ErrAlreadyClosed)
+	c.Assert(err, Equals, os.ErrClosed)
 
 	fr, ok := f.(io.ReaderAt)
 	c.Assert(ok, Equals, true)
 	_, err = fr.ReadAt(nil, 0)
-	c.Assert(err, Equals, ErrAlreadyClosed)
+	c.Assert(err, Equals, os.ErrClosed)
 
 	err = f.Close()
-	c.Assert(err, Equals, ErrAlreadyClosed)
+	c.Assert(err, Equals, os.ErrClosed)
 }
 
-func (s *SpecificFilesystemSuite) TestFileOperations(c *C) {
-	osFs := osfs.New(s.tmpDir)
-
-	fs := New(osFs, "test.siva")
-	c.Assert(fs, NotNil)
-
-	f1, err := fs.Create("testOne.txt")
+func (s *FilesystemSuite) TestFileOperations(c *C) {
+	f1, err := s.FS.Create("testOne.txt")
 	c.Assert(err, IsNil)
-	_, err = fs.Create("testTwo.txt")
+
+	_, err = s.FS.Create("testTwo.txt")
 	c.Assert(err, Equals, ErrFileWriteModeAlreadyOpen)
 
 	err = f1.Close()
 	c.Assert(err, IsNil)
 
-	_, err = fs.Create("testTree.txt")
+	_, err = s.FS.Create("testTree.txt")
 	c.Assert(err, IsNil)
 
-	f1, err = fs.Open("testOne.txt")
+	f1, err = s.FS.Open("testOne.txt")
 	c.Assert(err, IsNil)
 }
 
-func (s *SpecificFilesystemSuite) TestReadFs(c *C) {
+func (s *FilesystemSuite) TestReadFs(c *C) {
 	for _, fixture := range fixtures {
-		s.testReadFs(c, fixture)
+		fs := fixture.FS(c)
+		c.Assert(fs, NotNil)
+
+		s.testOpenAndRead(c, fixture, fs)
+		s.testReadDir(c, fixture, fs)
+		s.testStat(c, fixture, fs)
 	}
 }
 
-func (s *SpecificFilesystemSuite) testReadFs(c *C, fixture *Fixture) {
-	name := fixture.name
-	err := copyFile(fixture.Path(), filepath.Join(s.tmpDir, name))
-	c.Assert(err, IsNil)
-	osFs := osfs.New(s.tmpDir)
-
-	fs := New(osFs, name)
-	c.Assert(fs, NotNil)
-
-	c.Assert(fs.Base(), Equals, "/")
-
-	for _, path := range fixture.contents {
+func (s *FilesystemSuite) testOpenAndRead(c *C, f *Fixture, fs billy.Filesystem) {
+	for _, path := range f.contents {
 		f, err := fs.Open(path)
-		c.Assert(err, IsNil, Commentf("error opening %s", path))
+		c.Assert(err, IsNil)
 		c.Assert(f, NotNil)
+
 		read, err := ioutil.ReadAll(f)
 		c.Assert(err, IsNil)
 		c.Assert(len(read) > 0, Equals, true)
+
 		err = f.Close()
 		c.Assert(err, IsNil)
 	}
 
-	f, err := fs.Open("NON-EXISTANT")
-	c.Assert(f, IsNil)
-	c.Assert(err, Equals, stdos.ErrNotExist)
+	file, err := fs.Open("NON-EXISTANT")
+	c.Assert(file, IsNil)
+	c.Assert(err, Equals, os.ErrNotExist)
+}
 
+func (s *FilesystemSuite) testReadDir(c *C, f *Fixture, fs billy.Filesystem) {
 	for _, dir := range []string{"", ".", "/"} {
-		dirLs, err := fs.ReadDir(dir)
+		files, err := fs.ReadDir(dir)
 		c.Assert(err, IsNil)
-		c.Assert(len(dirLs), Equals, len(fixture.contents))
+		c.Assert(len(files), Equals, len(f.contents))
+
 		// Here we assume that ReadDir returns contents in physical order.
-		for idx, fi := range dirLs {
-			c.Assert(fixture.contents[idx], Equals, fi.Name())
+		for idx, fi := range files {
+			c.Assert(f.contents[idx], Equals, fi.Name())
 		}
 	}
 
 	dirLs, err := fs.ReadDir("NON-EXISTANT")
 	c.Assert(err, IsNil)
 	c.Assert(dirLs, HasLen, 0)
+}
 
-	for _, path := range fixture.contents {
+func (s *FilesystemSuite) testStat(c *C, f *Fixture, fs billy.Filesystem) {
+	for _, path := range f.contents {
 		fi, err := fs.Stat(path)
 		c.Assert(err, IsNil)
 		c.Assert(fi.Name(), Equals, path)
@@ -222,23 +199,106 @@ func (s *SpecificFilesystemSuite) testReadFs(c *C, fixture *Fixture) {
 
 	fi, err := fs.Stat("NON-EXISTANT")
 	c.Assert(fi, IsNil)
-	c.Assert(err, Equals, stdos.ErrNotExist)
+	c.Assert(err, Equals, os.ErrNotExist)
+}
 
-	subdirFs := fs.Dir("NON-EXISTANT")
-	c.Assert(subdirFs, NotNil)
+func (s *FilesystemSuite) TestRename(c *C) {
+	c.Skip("Rename not supported")
+}
+
+func (s *FilesystemSuite) TestOpenFileAppend(c *C) {
+	c.Skip("O_APPEND not supported")
+}
+
+func (s *FilesystemSuite) TestOpenFileNoTruncate(c *C) {
+	c.Skip("O_CREATE without O_TRUNC not supported")
+}
+
+func (s *FilesystemSuite) TestOpenFileReadWrite(c *C) {
+	c.Skip("O_RDWR not supported")
+}
+
+func (s *FilesystemSuite) TestSeekToEndAndWrite(c *C) {
+	c.Skip("does not support seek on writeable files")
+}
+
+func (s *FilesystemSuite) TestReadAtOnReadWrite(c *C) {
+	c.Skip("ReadAt not supported on writeable files")
+}
+
+func (s *FilesystemSuite) TestMkdirAll(c *C) {
+	c.Skip("MkdirAll method does nothing")
+}
+
+func (s *FilesystemSuite) TestMkdirAllIdempotent(c *C) {
+	c.Skip("MkdirAll method does nothing")
+}
+
+func (s *FilesystemSuite) TestMkdirAllNested(c *C) {
+	c.Skip("because MkdirAll does nothing, is not possible to check the " +
+		"Stat of a directory created with this mehtod")
+}
+
+func (s *FilesystemSuite) TestStatDir(c *C) {
+	c.Skip("StatDir is not possible because directories do not exists in siva")
+}
+
+func (s *FilesystemSuite) TestRenameToDir(c *C) {
+	c.Skip("Dir renaming not supported")
+}
+
+func (s *FilesystemSuite) TestRenameDir(c *C) {
+	c.Skip("Dir renaming not supported")
+}
+
+func (s *FilesystemSuite) TestFileNonRead(c *C) {
+	c.Skip("Is not possible to write a file and then read it at the same time")
+}
+
+func (s *FilesystemSuite) TestFileWrite(c *C) {
+	c.Skip("Open method open a file in write only mode")
 }
 
 func copyFile(src, dst string) error {
-	s, err := stdos.Open(src)
+	s, err := os.Open(src)
 	if err != nil {
 		return err
 	}
 	defer s.Close()
-	d, err := stdos.Create(dst)
+	d, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
 	defer d.Close()
 	_, err = io.Copy(d, s)
 	return err
+}
+
+type Fixture struct {
+	name     string
+	contents []string
+}
+
+const fixturesPath = "fixtures"
+
+var fixtures = []*Fixture{{
+	name: "basic.siva",
+	contents: []string{
+		"gopher.txt",
+		"readme.txt",
+		"todo.txt",
+	},
+}}
+
+func (f *Fixture) Path() string {
+	return filepath.Join(fixturesPath, f.name)
+}
+
+func (f *Fixture) FS(c *C) billy.Filesystem {
+	tmp := c.MkDir()
+
+	err := copyFile(f.Path(), filepath.Join(tmp, f.name))
+	c.Assert(err, IsNil)
+
+	return polyfill.New(New(osfs.New(tmp), f.name))
 }
