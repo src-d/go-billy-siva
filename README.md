@@ -9,7 +9,7 @@ Installation
 The recommended way to install go-billy-siva
 
 ```
-go get -u gopkg.in/src-d/go-billy-siva.v1/...
+go get -u gopkg.in/src-d/go-billy-siva.v0/...
 ```
 
 License
