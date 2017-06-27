@@ -11,6 +11,10 @@ import (
 	"time"
 
 	"gopkg.in/src-d/go-billy.v3"
+	"gopkg.in/src-d/go-billy.v3/helper/chroot"
+	"gopkg.in/src-d/go-billy.v3/helper/mount"
+	"gopkg.in/src-d/go-billy.v3/osfs"
+	"gopkg.in/src-d/go-billy.v3/util"
 	"gopkg.in/src-d/go-siva.v1"
 )
 
@@ -407,4 +411,25 @@ func removeLeadingSlash(path string) string {
 	}
 
 	return path
+}
+
+func NewFilesystem(fs billy.Filesystem, path string) billy.Filesystem {
+	tempdir := "/tmp"
+
+	temporal := osfs.New(os.TempDir())
+	root := New(fs, path)
+
+	mount := mount.New(root, tempdir, temporal)
+	return &Temporal{chroot.New(mount, "/"), tempdir}
+}
+
+type Temporal struct {
+	billy.Filesystem
+	defaultDir string
+}
+
+func (h *Temporal) TempFile(dir, prefix string) (billy.File, error) {
+	dir = h.Join(h.defaultDir, dir)
+
+	return util.TempFile(h.Filesystem, dir, prefix)
 }
