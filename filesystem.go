@@ -31,14 +31,14 @@ type SivaSync interface {
 	Sync() error
 }
 
-type SivaFS interface {
+type SivaBasicFS interface {
 	billy.Basic
 	billy.Dir
 
 	SivaSync
 }
 
-type SivaFilesystem interface {
+type SivaFS interface {
 	billy.Filesystem
 	SivaSync
 }
@@ -58,7 +58,7 @@ type sivaFS struct {
 //
 // All files opened in write mode must be closed, otherwise the siva file will
 // be corrupted.
-func New(fs billy.Filesystem, path string) SivaFS {
+func New(fs billy.Filesystem, path string) SivaBasicFS {
 	return &sivaFS{
 		underlying: fs,
 		path:       path,
@@ -68,7 +68,7 @@ func New(fs billy.Filesystem, path string) SivaFS {
 // NewFilesystem creates an entire filesystem using siva as the main backend,
 // but supplying unsupported functionality using as a temporal files backend
 // the main filesystem
-func NewFilesystem(fs billy.Filesystem, path string) (SivaFilesystem, error) {
+func NewFilesystem(fs billy.Filesystem, path string) (SivaFS, error) {
 	tempdir := "/tmp"
 	temporal, err := fs.Chroot(tempdir)
 	if err != nil {
@@ -79,7 +79,7 @@ func NewFilesystem(fs billy.Filesystem, path string) (SivaFilesystem, error) {
 
 	m := mount.New(root, tempdir, temporal)
 
-	t := &Temporal{
+	t := &temp{
 		defaultDir: tempdir,
 		SivaSync:   root,
 		Filesystem: chroot.New(m, "/"),
@@ -439,14 +439,14 @@ func removeLeadingSlash(path string) string {
 	return path
 }
 
-type Temporal struct {
+type temp struct {
 	billy.Filesystem
 	SivaSync
 
 	defaultDir string
 }
 
-func (h *Temporal) TempFile(dir, prefix string) (billy.File, error) {
+func (h *temp) TempFile(dir, prefix string) (billy.File, error) {
 	dir = h.Join(h.defaultDir, dir)
 
 	return util.TempFile(h.Filesystem, dir, prefix)

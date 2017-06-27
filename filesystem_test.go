@@ -21,7 +21,7 @@ type CompleteFilesystemSuite struct {
 	test.TempFileSuite
 	test.ChrootSuite
 
-	FS SivaFilesystem
+	FS SivaFS
 }
 
 var _ = Suite(&CompleteFilesystemSuite{})
@@ -54,7 +54,7 @@ type FilesystemSuite struct {
 	test.BasicSuite
 	test.DirSuite
 
-	FS SivaFS
+	FS SivaBasicFS
 }
 
 var _ = Suite(&FilesystemSuite{})
