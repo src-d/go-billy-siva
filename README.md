@@ -1,4 +1,4 @@
-# go-billy-siva [![GoDoc](https://godoc.org/gopkg.in/src-d/go-billy-siva.v1?status.svg)](https://godoc.org/gopkg.in/src-d/go-billy-siva.v1) [![Build Status](https://travis-ci.org/src-d/go-billy-siva.svg?branch=master)](https://travis-ci.org/src-d/go-billy-siva)
+# go-billy-siva [![GoDoc](https://godoc.org/gopkg.in/src-d/go-billy-siva.v2?status.svg)](https://godoc.org/gopkg.in/src-d/go-billy-siva.v2) [![Build Status](https://travis-ci.org/src-d/go-billy-siva.svg?branch=master)](https://travis-ci.org/src-d/go-billy-siva)
 
 
 `go-billy-siva` is a limit [billy](https://github.com/src-d/go-billy) filesystem implementation based on [`siva`](https://github.com/src-d/go-siva). The implementation is limited to `billy.Basic` and `billy.Dir`, the usage of the [billy.helpers](https://github.com/src-d/go-billy/tree/master/helper) is required to be able of use as a full `billy.Filesystem`
@@ -9,7 +9,7 @@ Installation
 The recommended way to install go-billy-siva
 
 ```
-go get -u gopkg.in/src-d/go-billy-siva.v1/...
+go get -u gopkg.in/src-d/go-billy-siva.v2/...
 ```
 
 License
