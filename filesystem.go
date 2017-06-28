@@ -11,29 +11,36 @@ import (
 	"time"
 
 	"gopkg.in/src-d/go-billy.v3"
+	"gopkg.in/src-d/go-billy.v3/helper/chroot"
+	"gopkg.in/src-d/go-billy.v3/helper/mount"
+	"gopkg.in/src-d/go-billy.v3/util"
 	"gopkg.in/src-d/go-siva.v1"
-)
-
-const (
-	defaultBase = "/"
 )
 
 var (
 	ErrNonSeekableFile          = errors.New("file non-seekable")
-	ErrAlreadyClosed            = errors.New("file was already closed")
 	ErrFileWriteModeAlreadyOpen = errors.New("previous file in write mode already open")
 	ErrReadOnlyFile             = errors.New("file is read-only")
 	ErrWriteOnlyFile            = errors.New("file is write-only")
 )
 
-type SivaFS interface {
-	billy.Basic
-	billy.Dir
-
+type SivaSync interface {
 	// Sync closes any open files, this method should be called at the end of
 	// program to ensure that all the files are properly closed, otherwise the
 	// siva file will be corrupted.
 	Sync() error
+}
+
+type SivaBasicFS interface {
+	billy.Basic
+	billy.Dir
+
+	SivaSync
+}
+
+type SivaFS interface {
+	billy.Filesystem
+	SivaSync
 }
 
 type sivaFS struct {
@@ -51,11 +58,34 @@ type sivaFS struct {
 //
 // All files opened in write mode must be closed, otherwise the siva file will
 // be corrupted.
-func New(fs billy.Filesystem, path string) SivaFS {
+func New(fs billy.Filesystem, path string) SivaBasicFS {
 	return &sivaFS{
 		underlying: fs,
 		path:       path,
 	}
+}
+
+// NewFilesystem creates an entire filesystem using siva as the main backend,
+// but supplying unsupported functionality using as a temporal files backend
+// the main filesystem
+func NewFilesystem(fs billy.Filesystem, path string) (SivaFS, error) {
+	tempdir := "/tmp"
+	temporal, err := fs.Chroot(tempdir)
+	if err != nil {
+		return nil, err
+	}
+
+	root := New(fs, path)
+
+	m := mount.New(root, tempdir, temporal)
+
+	t := &temp{
+		defaultDir: tempdir,
+		SivaSync:   root,
+		Filesystem: chroot.New(m, "/"),
+	}
+
+	return t, nil
 }
 
 // Create creates a new file. This file is created using CREATE, TRUNCATE and
@@ -407,4 +437,17 @@ func removeLeadingSlash(path string) string {
 	}
 
 	return path
+}
+
+type temp struct {
+	billy.Filesystem
+	SivaSync
+
+	defaultDir string
+}
+
+func (h *temp) TempFile(dir, prefix string) (billy.File, error) {
+	dir = h.Join(h.defaultDir, dir)
+
+	return util.TempFile(h.Filesystem, dir, prefix)
 }

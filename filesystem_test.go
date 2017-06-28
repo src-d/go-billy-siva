@@ -16,11 +16,45 @@ import (
 
 func Test(t *testing.T) { TestingT(t) }
 
+type CompleteFilesystemSuite struct {
+	FilesystemSuite
+	test.TempFileSuite
+	test.ChrootSuite
+
+	FS SivaFS
+}
+
+var _ = Suite(&CompleteFilesystemSuite{})
+
+func (s *CompleteFilesystemSuite) SetUpTest(c *C) {
+	s.FilesystemSuite.SetUpTest(c)
+
+	fs := osfs.New(c.MkDir())
+
+	f, err := fs.TempFile("", "siva-fs")
+	c.Assert(err, IsNil)
+	err = f.Close()
+	c.Assert(err, IsNil)
+
+	s.FS, err = NewFilesystem(fs, f.Name())
+	c.Assert(err, IsNil)
+
+	s.BasicSuite.FS = s.FS
+	s.DirSuite.FS = s.FS
+	s.TempFileSuite.FS = s.FS
+	s.ChrootSuite.FS = s.FS
+}
+
+func (s *CompleteFilesystemSuite) TestTempFileWithPath(c *C) {
+	c.Skip("This test case is not valid for the sivaFS case.")
+}
+
 type FilesystemSuite struct {
+	BaseSivaFsSuite
 	test.BasicSuite
 	test.DirSuite
 
-	FS SivaFS
+	FS SivaBasicFS
 }
 
 var _ = Suite(&FilesystemSuite{})
@@ -202,60 +236,62 @@ func (s *FilesystemSuite) testStat(c *C, f *Fixture, fs billy.Filesystem) {
 	c.Assert(err, Equals, os.ErrNotExist)
 }
 
-func (s *FilesystemSuite) TestRename(c *C) {
+type BaseSivaFsSuite struct{}
+
+func (s *BaseSivaFsSuite) TestRename(c *C) {
 	c.Skip("Rename not supported")
 }
 
-func (s *FilesystemSuite) TestOpenFileAppend(c *C) {
+func (s *BaseSivaFsSuite) TestOpenFileAppend(c *C) {
 	c.Skip("O_APPEND not supported")
 }
 
-func (s *FilesystemSuite) TestOpenFileNoTruncate(c *C) {
+func (s *BaseSivaFsSuite) TestOpenFileNoTruncate(c *C) {
 	c.Skip("O_CREATE without O_TRUNC not supported")
 }
 
-func (s *FilesystemSuite) TestOpenFileReadWrite(c *C) {
+func (s *BaseSivaFsSuite) TestOpenFileReadWrite(c *C) {
 	c.Skip("O_RDWR not supported")
 }
 
-func (s *FilesystemSuite) TestSeekToEndAndWrite(c *C) {
+func (s *BaseSivaFsSuite) TestSeekToEndAndWrite(c *C) {
 	c.Skip("does not support seek on writeable files")
 }
 
-func (s *FilesystemSuite) TestReadAtOnReadWrite(c *C) {
+func (s *BaseSivaFsSuite) TestReadAtOnReadWrite(c *C) {
 	c.Skip("ReadAt not supported on writeable files")
 }
 
-func (s *FilesystemSuite) TestMkdirAll(c *C) {
+func (s *BaseSivaFsSuite) TestMkdirAll(c *C) {
 	c.Skip("MkdirAll method does nothing")
 }
 
-func (s *FilesystemSuite) TestMkdirAllIdempotent(c *C) {
+func (s *BaseSivaFsSuite) TestMkdirAllIdempotent(c *C) {
 	c.Skip("MkdirAll method does nothing")
 }
 
-func (s *FilesystemSuite) TestMkdirAllNested(c *C) {
+func (s *BaseSivaFsSuite) TestMkdirAllNested(c *C) {
 	c.Skip("because MkdirAll does nothing, is not possible to check the " +
 		"Stat of a directory created with this mehtod")
 }
 
-func (s *FilesystemSuite) TestStatDir(c *C) {
+func (s *BaseSivaFsSuite) TestStatDir(c *C) {
 	c.Skip("StatDir is not possible because directories do not exists in siva")
 }
 
-func (s *FilesystemSuite) TestRenameToDir(c *C) {
+func (s *BaseSivaFsSuite) TestRenameToDir(c *C) {
 	c.Skip("Dir renaming not supported")
 }
 
-func (s *FilesystemSuite) TestRenameDir(c *C) {
+func (s *BaseSivaFsSuite) TestRenameDir(c *C) {
 	c.Skip("Dir renaming not supported")
 }
 
-func (s *FilesystemSuite) TestFileNonRead(c *C) {
+func (s *BaseSivaFsSuite) TestFileNonRead(c *C) {
 	c.Skip("Is not possible to write a file and then read it at the same time")
 }
 
-func (s *FilesystemSuite) TestFileWrite(c *C) {
+func (s *BaseSivaFsSuite) TestFileWrite(c *C) {
 	c.Skip("Open method open a file in write only mode")
 }
 
