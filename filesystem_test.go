@@ -10,6 +10,7 @@ import (
 	. "gopkg.in/check.v1"
 	"gopkg.in/src-d/go-billy.v3"
 	"gopkg.in/src-d/go-billy.v3/helper/polyfill"
+	"gopkg.in/src-d/go-billy.v3/memfs"
 	"gopkg.in/src-d/go-billy.v3/osfs"
 	"gopkg.in/src-d/go-billy.v3/test"
 )
@@ -36,7 +37,7 @@ func (s *CompleteFilesystemSuite) SetUpTest(c *C) {
 	err = f.Close()
 	c.Assert(err, IsNil)
 
-	s.FS, err = NewFilesystem(fs, f.Name())
+	s.FS, err = NewFilesystem(fs, f.Name(), memfs.New())
 	c.Assert(err, IsNil)
 
 	s.BasicSuite.FS = s.FS
