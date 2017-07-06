@@ -67,17 +67,13 @@ func New(fs billy.Filesystem, path string) SivaBasicFS {
 
 // NewFilesystem creates an entire filesystem using siva as the main backend,
 // but supplying unsupported functionality using as a temporal files backend
-// the main filesystem
-func NewFilesystem(fs billy.Filesystem, path string) (SivaFS, error) {
+// the main filesystem. It needs an additional parameter `tmpFs` where temporary
+// files will be stored. Note that `tmpFs` will be mounted as /tmp.
+func NewFilesystem(fs billy.Filesystem, path string, tmpFs billy.Filesystem) (SivaFS, error) {
 	tempdir := "/tmp"
-	temporal, err := fs.Chroot(tempdir)
-	if err != nil {
-		return nil, err
-	}
 
 	root := New(fs, path)
-
-	m := mount.New(root, tempdir, temporal)
+	m := mount.New(root, tempdir, tmpFs)
 
 	t := &temp{
 		defaultDir: tempdir,
