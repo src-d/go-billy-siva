@@ -384,14 +384,19 @@ func getDir(index siva.Index, dir string) (os.FileInfo, error) {
 func listDirs(index siva.Index, dir string) ([]os.FileInfo, error) {
 	dir = addTrailingSlash(dir)
 
-	entries, err := index.Glob(fmt.Sprintf("%s*/*", dir))
-	if err != nil {
-		return nil, err
-	}
-
+	depth := strings.Count(dir, "/")
 	dirs := map[string]time.Time{}
-	for _, e := range entries {
-		dir := filepath.Dir(e.Name)
+	for _, e := range index {
+		if !strings.HasPrefix(e.Name, dir) {
+			continue
+		}
+
+		targetParts := strings.Split(e.Name, "/")
+		if len(targetParts) <= depth+1 {
+			continue
+		}
+
+		dir := strings.Join(targetParts[:depth+1], "/")
 		oldDir, ok := dirs[dir]
 		if !ok || oldDir.Before(e.ModTime) {
 			dirs[dir] = e.ModTime

@@ -50,6 +50,10 @@ func (s *CompleteFilesystemSuite) TestTempFileWithPath(c *C) {
 	c.Skip("This test case is not valid for the sivaFS case.")
 }
 
+func (s *CompleteFilesystemSuite) TestTempFileManyWithUtil(c *C) {
+	c.Skip("This test case is not valid for the sivaFS case.")
+}
+
 type FilesystemSuite struct {
 	BaseSivaFsSuite
 	test.BasicSuite
