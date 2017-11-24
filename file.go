@@ -4,7 +4,7 @@ import (
 	"io"
 	"os"
 
-	"gopkg.in/src-d/go-billy.v3"
+	"gopkg.in/src-d/go-billy.v4"
 	"gopkg.in/src-d/go-siva.v1"
 )
 
@@ -96,4 +96,12 @@ func (f *file) Close() error {
 	}
 
 	return f.closeNotify()
+}
+
+func (f *file) Lock() error {
+	return nil
+}
+
+func (f *file) Unlock() error {
+	return nil
 }
