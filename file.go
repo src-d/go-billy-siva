@@ -98,10 +98,12 @@ func (f *file) Close() error {
 	return f.closeNotify()
 }
 
+// Lock is a no-op. It's not implemented in the underlying siva library.
 func (f *file) Lock() error {
 	return nil
 }
 
+// Unlock is a no-op. It's not implemented in the underlying siva library.
 func (f *file) Unlock() error {
 	return nil
 }
