@@ -300,6 +300,10 @@ func (s *BaseSivaFsSuite) TestFileWrite(c *C) {
 	c.Skip("Open method open a file in write only mode")
 }
 
+func (s *BaseSivaFsSuite) TestTruncate(c *C) {
+	c.Skip("Truncate is not supported")
+}
+
 func copyFile(src, dst string) error {
 	s, err := os.Open(src)
 	if err != nil {

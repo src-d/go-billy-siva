@@ -107,3 +107,8 @@ func (f *file) Lock() error {
 func (f *file) Unlock() error {
 	return nil
 }
+
+// Truncate is not supported by siva files.
+func (f *file) Truncate(size int64) error {
+	return billy.ErrNotSupported
+}
