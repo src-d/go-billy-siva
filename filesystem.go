@@ -308,7 +308,7 @@ func (fs *sivaFS) createFile(path string, flag int, mode os.FileMode) (billy.Fil
 	}
 
 	defer func() { fs.fileWriteModeOpen = true }()
-	return newFile(path, fs.rw, closeFunc), nil
+	return newFile(path, fs, flag, fs.rw, closeFunc), nil
 }
 
 func (fs *sivaFS) openFile(path string, flag int, mode os.FileMode) (billy.File, error) {
@@ -331,7 +331,7 @@ func (fs *sivaFS) openFile(path string, flag int, mode os.FileMode) (billy.File,
 		return nil, err
 	}
 
-	return openFile(path, sr), nil
+	return openFile(path, fs, flag, sr), nil
 }
 
 func (fs *sivaFS) getIndex() (siva.Index, error) {

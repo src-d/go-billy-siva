@@ -12,23 +12,31 @@ type file struct {
 	name        string
 	closeNotify func() error
 	isClosed    bool
+	fileSystem  *sivaFS
+	flag        int
 
 	w siva.Writer
 	r *io.SectionReader
 }
 
-func newFile(filename string, w siva.Writer, closeNotify func() error) billy.File {
+func newFile(filename string, fileSystem *sivaFS, flag int, w siva.Writer,
+	closeNotify func() error) billy.File {
+
 	return &file{
 		name:        filename,
 		closeNotify: closeNotify,
 		w:           w,
+		fileSystem:  fileSystem,
+		flag:        flag,
 	}
 }
 
-func openFile(filename string, r *io.SectionReader) billy.File {
+func openFile(filename string, fileSystem *sivaFS, flag int, r *io.SectionReader) billy.File {
 	return &file{
-		name: filename,
-		r:    r,
+		name:       filename,
+		r:          r,
+		fileSystem: fileSystem,
+		flag:       flag,
 	}
 }
 
@@ -108,7 +116,52 @@ func (f *file) Unlock() error {
 	return nil
 }
 
-// Truncate is not supported by siva files.
+// Truncate creates the file again with the amount of bytes provide in
+// size. The file is opened several times as RDWD mode is not supported.
 func (f *file) Truncate(size int64) error {
-	return billy.ErrNotSupported
+	f.Close()
+
+	tmpF, err := f.fileSystem.Open(f.name)
+	if err != nil {
+		return err
+	}
+
+	buffer := make([]byte, size)
+	_, err = tmpF.Read(buffer)
+	if err != err {
+		tmpF.Close()
+
+		return err
+	}
+
+	tmpF.Close()
+
+	tmpF, err = f.fileSystem.Create(f.name)
+	if err != nil {
+		return err
+	}
+
+	_, err = tmpF.Write(buffer)
+	if err != nil {
+		tmpF.Close()
+
+		return err
+	}
+
+	tmpF.Close()
+	tmpF, err = f.fileSystem.OpenFile(f.name, f.flag, os.FileMode(0666))
+	if err != nil {
+		return err
+	}
+
+	nf := tmpF.(*file)
+
+	// copy data from the new file structure to the current one
+	f.closeNotify = nf.closeNotify
+	f.isClosed = nf.isClosed
+	f.flag = nf.flag
+	f.w = nf.w
+	f.r = nf.r
+
+	return nil
 }
