@@ -301,7 +301,46 @@ func (s *BaseSivaFsSuite) TestFileWrite(c *C) {
 }
 
 func (s *BaseSivaFsSuite) TestTruncate(c *C) {
-	c.Skip("Truncate is not supported")
+	c.Skip("Standard test is incompatible. Tested in TestSivaTruncate")
+}
+
+func (s *FilesystemSuite) TestSivaTruncate(c *C) {
+	f, err := s.FS.Create("testTruncate.txt")
+	c.Assert(err, IsNil)
+
+	testString := []byte("1234567890")
+	n, err := f.Write(testString)
+	c.Assert(err, IsNil)
+	c.Assert(n, Equals, len(testString))
+
+	err = f.Close()
+	c.Assert(err, IsNil)
+
+	f, err = s.FS.Open("testTruncate.txt")
+	c.Assert(err, IsNil)
+
+	bytes, err := ioutil.ReadAll(f)
+	c.Assert(err, IsNil)
+	c.Assert(string(bytes), Equals, string(testString))
+
+	err = f.Truncate(8)
+	c.Assert(err, IsNil)
+
+	bytes, err = ioutil.ReadAll(f)
+	c.Assert(err, IsNil)
+	c.Assert(string(bytes), Equals, string(testString[0:8]))
+
+	err = f.Truncate(15)
+	c.Assert(err, IsNil)
+
+	bytes, err = ioutil.ReadAll(f)
+	c.Assert(err, IsNil)
+	newString := append(make([]byte, 0), testString[0:8]...)
+	newString = append(newString, make([]byte, 15-8)...)
+	c.Assert(string(bytes), Equals, string(newString))
+
+	err = f.Close()
+	c.Assert(err, IsNil)
 }
 
 func copyFile(src, dst string) error {
