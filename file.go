@@ -121,31 +121,36 @@ func (f *file) Unlock() error {
 func (f *file) Truncate(size int64) error {
 	f.Close()
 
-	tmpF, err := f.fileSystem.Open(f.name)
-	if err != nil {
-		return err
-	}
-
 	buffer := make([]byte, size)
-	_, err = tmpF.Read(buffer)
-	if err != err {
-		tmpF.Close()
 
-		return err
+	if size > 0 {
+		tmpF, err := f.fileSystem.Open(f.name)
+		if err != nil {
+			return err
+		}
+
+		_, err = tmpF.Read(buffer)
+		if err != err {
+			tmpF.Close()
+
+			return err
+		}
+
+		tmpF.Close()
 	}
 
-	tmpF.Close()
-
-	tmpF, err = f.fileSystem.Create(f.name)
+	tmpF, err := f.fileSystem.Create(f.name)
 	if err != nil {
 		return err
 	}
 
-	_, err = tmpF.Write(buffer)
-	if err != nil {
-		tmpF.Close()
+	if size > 0 {
+		_, err = tmpF.Write(buffer)
+		if err != nil {
+			tmpF.Close()
 
-		return err
+			return err
+		}
 	}
 
 	tmpF.Close()
