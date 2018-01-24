@@ -48,6 +48,7 @@ type sivaFS struct {
 	path       string
 	f          billy.File
 	rw         *siva.ReadWriter
+	index      siva.Index
 
 	fileWriteModeOpen bool
 }
@@ -210,6 +211,9 @@ func (fs *sivaFS) Remove(path string) error {
 	e := index.Find(path)
 
 	if e != nil {
+		// delete index cache on modification
+		fs.index = nil
+
 		return fs.rw.WriteHeader(&siva.Header{
 			Name:    path,
 			ModTime: time.Now(),
@@ -291,6 +295,9 @@ func (fs *sivaFS) createFile(path string, flag int, mode os.FileMode) (billy.Fil
 		ModTime: time.Now(),
 	}
 
+	// delete index cache on modification
+	fs.index = nil
+
 	if err := fs.rw.WriteHeader(header); err != nil {
 		return nil, err
 	}
@@ -335,12 +342,19 @@ func (fs *sivaFS) openFile(path string, flag int, mode os.FileMode) (billy.File,
 }
 
 func (fs *sivaFS) getIndex() (siva.Index, error) {
+	// return cached index
+	if fs.index != nil {
+		return fs.index, nil
+	}
+
 	index, err := fs.rw.Index()
 	if err != nil {
 		return nil, err
 	}
 
-	return index.Filter(), nil
+	fs.index = index.Filter()
+
+	return fs.index, nil
 }
 
 func listFiles(index siva.Index, dir string) ([]os.FileInfo, error) {
