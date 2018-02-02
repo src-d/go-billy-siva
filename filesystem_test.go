@@ -195,16 +195,21 @@ func (s *FilesystemSuite) TestReadFs(c *C) {
 
 func (s *FilesystemSuite) testOpenAndRead(c *C, f *Fixture, fs billy.Filesystem) {
 	for _, path := range f.contents {
-		f, err := fs.Open(path)
+		s, err := fs.Stat(path)
 		c.Assert(err, IsNil)
-		c.Assert(f, NotNil)
 
-		read, err := ioutil.ReadAll(f)
-		c.Assert(err, IsNil)
-		c.Assert(len(read) > 0, Equals, true)
+		if !s.IsDir() {
+			f, err := fs.Open(path)
+			c.Assert(err, IsNil)
+			c.Assert(f, NotNil)
 
-		err = f.Close()
-		c.Assert(err, IsNil)
+			read, err := ioutil.ReadAll(f)
+			c.Assert(err, IsNil)
+			c.Assert(len(read) > 0, Equals, true)
+
+			err = f.Close()
+			c.Assert(err, IsNil)
+		}
 	}
 
 	file, err := fs.Open("NON-EXISTANT")
@@ -329,6 +334,8 @@ const fixturesPath = "fixtures"
 var fixtures = []*Fixture{{
 	name: "basic.siva",
 	contents: []string{
+		"dir",
+		"nested_dir",
 		"gopher.txt",
 		"readme.txt",
 		"todo.txt",
