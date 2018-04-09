@@ -375,10 +375,16 @@ func listFiles(index siva.Index, dir string) ([]os.FileInfo, error) {
 
 func getDir(index siva.Index, dir string) (os.FileInfo, error) {
 	dir = addTrailingSlash(dir)
+	lenDir := len(dir)
 
-	entries, err := index.Glob(path.Join(dir, "*"))
-	if err != nil {
-		return nil, err
+	entries := make([]*siva.IndexEntry, 0)
+
+	for _, e := range index {
+		if len(e.Name) > lenDir {
+			if e.Name[:lenDir] == dir {
+				entries = append(entries, e)
+			}
+		}
 	}
 
 	if len(entries) == 0 {
@@ -400,6 +406,7 @@ func listDirs(index siva.Index, dir string) ([]os.FileInfo, error) {
 
 	depth := strings.Count(dir, "/")
 	dirs := map[string]time.Time{}
+	dirOrder := make([]string, 0)
 	for _, e := range index {
 		if !strings.HasPrefix(e.Name, dir) {
 			continue
@@ -414,12 +421,15 @@ func listDirs(index siva.Index, dir string) ([]os.FileInfo, error) {
 		oldDir, ok := dirs[dir]
 		if !ok || oldDir.Before(e.ModTime) {
 			dirs[dir] = e.ModTime
+			if !ok {
+				dirOrder = append(dirOrder, dir)
+			}
 		}
 	}
 
 	contents := []os.FileInfo{}
-	for dir, mt := range dirs {
-		contents = append(contents, newDirFileInfo(dir, mt))
+	for _, dir := range dirOrder {
+		contents = append(contents, newDirFileInfo(dir, dirs[dir]))
 	}
 
 	return contents, nil
