@@ -190,6 +190,7 @@ func (s *FilesystemSuite) TestReadFs(c *C) {
 		s.testOpenAndRead(c, fixture, fs)
 		s.testReadDir(c, fixture, fs)
 		s.testStat(c, fixture, fs)
+		s.testNested(c, fixture, fs)
 	}
 }
 
@@ -244,6 +245,26 @@ func (s *FilesystemSuite) testStat(c *C, f *Fixture, fs billy.Filesystem) {
 	fi, err := fs.Stat("NON-EXISTANT")
 	c.Assert(fi, IsNil)
 	c.Assert(err, Equals, os.ErrNotExist)
+}
+
+func (s *FilesystemSuite) testNested(c *C, f *Fixture, fs billy.Filesystem) {
+	for _, dir := range f.nested {
+		c.Assert(fs, NotNil)
+
+		stat, err := fs.Stat(dir.name)
+		c.Assert(err, IsNil)
+		c.Assert(stat.IsDir(), Equals, dir.dir)
+
+		if stat.IsDir() {
+			files, err := fs.ReadDir(dir.name)
+			c.Assert(err, IsNil)
+			c.Assert(len(files), Equals, len(dir.files))
+
+			for idx, fi := range files {
+				c.Assert(dir.files[idx], Equals, fi.Name())
+			}
+		}
+	}
 }
 
 type BaseSivaFsSuite struct{}
@@ -324,23 +345,38 @@ func copyFile(src, dst string) error {
 	return err
 }
 
+type nestedContent struct {
+	name  string
+	dir   bool
+	files []string
+}
+
 type Fixture struct {
 	name     string
 	contents []string
+	nested   []nestedContent
 }
 
 const fixturesPath = "fixtures"
 
-var fixtures = []*Fixture{{
-	name: "basic.siva",
-	contents: []string{
-		"dir",
-		"nested_dir",
-		"gopher.txt",
-		"readme.txt",
-		"todo.txt",
+var fixtures = []*Fixture{
+	{
+		name: "basic.siva",
+		contents: []string{
+			"dir",
+			"nested_dir",
+			"gopher.txt",
+			"readme.txt",
+			"todo.txt",
+		},
+		nested: []nestedContent{
+			{"dir", true, []string{"winter.txt"}},
+			{"nested_dir", true, []string{"dir"}},
+			{"nested_dir/dir", true, []string{"nested_file.txt"}},
+			{"nested_dir/dir/nested_file.txt", false, nil},
+		},
 	},
-}}
+}
 
 func (f *Fixture) Path() string {
 	return filepath.Join(fixturesPath, f.name)
