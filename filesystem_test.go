@@ -375,6 +375,11 @@ var fixtures = []*Fixture{
 			{"nested_dir/dir", true, []string{"nested_file.txt"}},
 			{"nested_dir/dir/nested_file.txt", false, nil},
 		},
+	}, {
+		name: "zipslip.siva",
+		contents: []string{
+			"imoutside",
+		},
 	},
 }
 
