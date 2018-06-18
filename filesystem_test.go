@@ -193,6 +193,18 @@ func (s *FilesystemSuite) TestReadFs(c *C) {
 	}
 }
 
+func (s *FilesystemSuite) TestCapabilities(c *C) {
+	f := fixtures[0]
+	fs := f.FS(c)
+
+	caps := billy.Capabilities(fs)
+	expected := billy.ReadCapability |
+		billy.WriteCapability |
+		billy.SeekCapability
+
+	c.Assert(caps, Equals, expected)
+}
+
 func (s *FilesystemSuite) testOpenAndRead(c *C, f *Fixture, fs billy.Filesystem) {
 	for _, path := range f.contents {
 		f, err := fs.Open(path)

@@ -243,6 +243,13 @@ func (fs *sivaFS) Sync() error {
 	return fs.ensureClosed()
 }
 
+// Capability implements billy.Capable interface.
+func (fs *sivaFS) Capabilities() billy.Capability {
+	return billy.ReadCapability |
+		billy.WriteCapability |
+		billy.SeekCapability
+}
+
 func (fs *sivaFS) ensureOpen() error {
 	if fs.rw != nil {
 		return nil
