@@ -361,7 +361,8 @@ func (fs *sivaFS) getIndex() (siva.Index, error) {
 		return nil, err
 	}
 
-	fs.index = index.Filter()
+	fs.index = index.ToSafePaths()
+	fs.index = fs.index.Filter()
 
 	return fs.index, nil
 }
