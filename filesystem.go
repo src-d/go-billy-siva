@@ -52,7 +52,6 @@ type sivaFS struct {
 	path       string
 	f          billy.File
 	rw         *siva.ReadWriter
-	index      siva.Index
 
 	fileWriteModeOpen bool
 }
@@ -215,9 +214,6 @@ func (fs *sivaFS) Remove(path string) error {
 	e := index.Find(path)
 
 	if e != nil {
-		// delete index cache on modification
-		fs.index = nil
-
 		return fs.rw.WriteHeader(&siva.Header{
 			Name:    path,
 			ModTime: time.Now(),
@@ -304,9 +300,6 @@ func (fs *sivaFS) createFile(path string, flag int, mode os.FileMode) (billy.Fil
 		ModTime: time.Now(),
 	}
 
-	// delete index cache on modification
-	fs.index = nil
-
 	if err := fs.rw.WriteHeader(header); err != nil {
 		return nil, err
 	}
@@ -350,27 +343,19 @@ func (fs *sivaFS) openFile(path string, flag int, mode os.FileMode) (billy.File,
 	return openFile(path, sr), nil
 }
 
-func (fs *sivaFS) getIndex() (siva.Index, error) {
-	// return cached index
-	if fs.index != nil {
-		return fs.index, nil
-	}
-
+func (fs *sivaFS) getIndex() (siva.OrderedIndex, error) {
 	index, err := fs.rw.Index()
 	if err != nil {
 		return nil, err
 	}
 
-	fs.index = index.ToSafePaths()
-	fs.index = fs.index.Filter()
-
-	return fs.index, nil
+	return siva.OrderedIndex(index.ToSafePaths()), nil
 }
 
-func listFiles(index siva.Index, dir string) ([]os.FileInfo, error) {
+func listFiles(index siva.OrderedIndex, dir string) ([]os.FileInfo, error) {
 	dir = addTrailingSlash(dir)
 
-	entries, err := index.Glob(fmt.Sprintf("%s*", dir))
+	entries, err := siva.Index(index).Glob(fmt.Sprintf("%s*", dir))
 	if err != nil {
 		return nil, err
 	}
@@ -383,7 +368,7 @@ func listFiles(index siva.Index, dir string) ([]os.FileInfo, error) {
 	return contents, nil
 }
 
-func getDir(index siva.Index, dir string) (os.FileInfo, error) {
+func getDir(index siva.OrderedIndex, dir string) (os.FileInfo, error) {
 	dir = addTrailingSlash(dir)
 	lenDir := len(dir)
 
@@ -411,7 +396,7 @@ func getDir(index siva.Index, dir string) (os.FileInfo, error) {
 	return newDirFileInfo(path.Clean(dir), oldDir), nil
 }
 
-func listDirs(index siva.Index, dir string) ([]os.FileInfo, error) {
+func listDirs(index siva.OrderedIndex, dir string) ([]os.FileInfo, error) {
 	dir = addTrailingSlash(dir)
 
 	depth := strings.Count(dir, "/")
