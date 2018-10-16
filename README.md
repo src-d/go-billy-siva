@@ -12,6 +12,11 @@ The recommended way to install go-billy-siva
 go get -u gopkg.in/src-d/go-billy-siva.v4/...
 ```
 
+Dependencies
+------------
+
+It needs go-siva >= 1.3.0.
+
 License
 -------
 
