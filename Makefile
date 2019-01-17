@@ -1,25 +1,11 @@
-# General
-WORKDIR = $(PWD)
+# Package configuration
+PROJECT = go-billy-siva
 
-# Go parameters
-GOCMD = go
-GOTEST = $(GOCMD) test -v
-
-# Coverage
-COVERAGE_REPORT = coverage.txt
-COVERAGE_PROFILE = profile.out
-COVERAGE_MODE = atomic
-
-test-coverage:
-	cd $(WORKDIR); \
-	echo "" > $(COVERAGE_REPORT); \
-	for dir in `find . -name "*.go" | grep -o '.*/' | sort | uniq`; do \
-		$(GOTEST) $$dir -coverprofile=$(COVERAGE_PROFILE) -covermode=$(COVERAGE_MODE); \
-		if [ $$? != 0 ]; then \
-			exit 2; \
-		fi; \
-		if [ -f $(COVERAGE_PROFILE) ]; then \
-			cat $(COVERAGE_PROFILE) >> $(COVERAGE_REPORT); \
-			rm $(COVERAGE_PROFILE); \
-		fi; \
-	done; \
+# Including ci Makefile
+CI_REPOSITORY ?= https://github.com/src-d/ci.git
+CI_BRANCH ?= v1
+CI_PATH ?= .ci
+MAKEFILE := $(CI_PATH)/Makefile.main
+$(MAKEFILE):
+	git clone --quiet --depth 1 -b $(CI_BRANCH) $(CI_REPOSITORY) $(CI_PATH);
+-include $(MAKEFILE)
