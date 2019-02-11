@@ -3,6 +3,7 @@ package sivafs
 import (
 	"io"
 	"os"
+	"path/filepath"
 
 	"gopkg.in/src-d/go-billy.v4"
 	"gopkg.in/src-d/go-siva.v1"
@@ -19,7 +20,7 @@ type file struct {
 
 func newFile(filename string, w siva.Writer, closeNotify func() error) billy.File {
 	return &file{
-		name:        filename,
+		name:        filepath.FromSlash(filename),
 		closeNotify: closeNotify,
 		w:           w,
 	}
@@ -27,7 +28,7 @@ func newFile(filename string, w siva.Writer, closeNotify func() error) billy.Fil
 
 func openFile(filename string, r *io.SectionReader) billy.File {
 	return &file{
-		name: filename,
+		name: filepath.FromSlash(filename),
 		r:    r,
 	}
 }

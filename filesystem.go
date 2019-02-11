@@ -174,6 +174,8 @@ func (fs *sivaFS) ReadDir(path string) ([]os.FileInfo, error) {
 }
 
 func (fs *sivaFS) MkdirAll(filename string, perm os.FileMode) error {
+	filename = normalizePath(filename)
+
 	if err := fs.ensureOpen(); err != nil {
 		return err
 	}
@@ -446,7 +448,8 @@ func addTrailingSlash(path string) string {
 // normalizePath returns a path relative to '/'.
 // It assumes UNIX-style slash-delimited paths.
 func normalizePath(path string) string {
-	path = filepath.Join("/", path)
+	path = filepath.Join(string(filepath.Separator), path)
+	path = filepath.ToSlash(path)
 	return removeLeadingSlash(path)
 }
 
