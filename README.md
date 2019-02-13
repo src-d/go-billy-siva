@@ -15,7 +15,7 @@ go get -u gopkg.in/src-d/go-billy-siva.v4/...
 Dependencies
 ------------
 
-It needs go-siva >= 1.3.0.
+It needs go-siva >= 1.4.0.
 
 License
 -------
