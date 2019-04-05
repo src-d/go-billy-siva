@@ -109,7 +109,7 @@ func NewFilesystemWithOptions(
 ) (SivaFS, error) {
 	tempdir := "/tmp"
 
-	if o.ReadOnly && o.Offset != 0 {
+	if !o.ReadOnly && o.Offset != 0 {
 		return nil, ErrOffsetReadWrite
 	}
 
