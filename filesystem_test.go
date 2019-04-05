@@ -213,6 +213,9 @@ func (s *FilesystemSuite) TestCapabilities(c *C) {
 func testOpenAndRead(c *C, f *Fixture, fs billy.Filesystem) {
 	for _, path := range f.contents {
 		s, err := fs.Stat(path)
+		if err != nil {
+			println("path", path)
+		}
 		c.Assert(err, IsNil)
 
 		if !s.IsDir() {
@@ -277,7 +280,7 @@ func testNested(c *C, f *Fixture, fs billy.Filesystem) {
 			c.Assert(len(files), Equals, len(dir.files))
 
 			for idx, fi := range files {
-				c.Assert(dir.files[idx], Equals, fi.Name())
+				c.Assert(fi.Name(), Equals, dir.files[idx])
 			}
 		}
 	}
@@ -369,6 +372,7 @@ type nestedContent struct {
 
 type Fixture struct {
 	name     string
+	unsafe   bool
 	contents []string
 	nested   []nestedContent
 }
@@ -396,6 +400,12 @@ var fixtures = []*Fixture{
 		contents: []string{
 			"imoutside",
 		},
+	}, {
+		name:   "zipslip.siva",
+		unsafe: true,
+		contents: []string{
+			"subdir",
+		},
 	},
 }
 
@@ -409,11 +419,12 @@ func (f *Fixture) FS(c *C, readOnly bool) billy.Filesystem {
 	err := copyFile(f.Path(), filepath.Join(tmp, f.name))
 	c.Assert(err, IsNil)
 
-	if !readOnly {
-		return polyfill.New(New(osfs.New(tmp), f.name))
+	options := SivaFSOptions{
+		UnsafePaths: f.unsafe,
+		ReadOnly:    readOnly,
 	}
 
-	fs, err := NewFilesystemReadOnly(osfs.New(tmp), f.name, 0)
+	fs, err := NewFilesystemWithOptions(osfs.New(tmp), f.name, memfs.New(), options)
 	c.Assert(err, IsNil)
 
 	return fs
