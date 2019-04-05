@@ -23,6 +23,7 @@ var (
 	ErrReadOnlyFile             = errors.New("file is read-only")
 	ErrWriteOnlyFile            = errors.New("file is write-only")
 	ErrReadOnlyFilesystem       = errors.New("filesystem is read-only")
+	ErrOffsetReadWrite          = errors.New("can only specify the offset in a read only filesystem")
 )
 
 const sivaCapabilities = billy.ReadCapability |
@@ -48,16 +49,26 @@ type SivaFS interface {
 	SivaSync
 }
 
+// SivaFSOptions holds configuration options for the filesystem.
+type SivaFSOptions struct {
+	// UnsafePaths set to on does not sanitize file paths.
+	UnsafePaths bool
+	// ReadOnly opens the siva file in read only mode.
+	ReadOnly bool
+	// Offset specifies the offset of the index. If it is 0 then the latest
+	// index is used. This is only usable in read only mode.
+	Offset uint64
+}
+
 type sivaFS struct {
 	underlying billy.Filesystem
 	path       string
 	f          billy.File
 	rw         *siva.ReadWriter
 	r          siva.Reader
-	offset     uint64
 
 	fileWriteModeOpen bool
-	readOnly          bool
+	options           SivaFSOptions
 }
 
 // New creates a new filesystem backed by a siva file with the given path in
@@ -67,9 +78,16 @@ type sivaFS struct {
 // All files opened in write mode must be closed, otherwise the siva file will
 // be corrupted.
 func New(fs billy.Filesystem, path string) SivaBasicFS {
+	return NewWithOptions(fs, path, SivaFSOptions{})
+}
+
+// NewWithOptions creates a new siva backed filesystem and accepts options.
+// See New documentation.
+func NewWithOptions(fs billy.Filesystem, path string, o SivaFSOptions) SivaBasicFS {
 	return &sivaFS{
 		underlying: fs,
 		path:       path,
+		options:    o,
 	}
 }
 
@@ -78,9 +96,34 @@ func New(fs billy.Filesystem, path string) SivaBasicFS {
 // the main filesystem. It needs an additional parameter `tmpFs` where temporary
 // files will be stored. Note that `tmpFs` will be mounted as /tmp.
 func NewFilesystem(fs billy.Filesystem, path string, tmpFs billy.Filesystem) (SivaFS, error) {
+	return NewFilesystemWithOptions(fs, path, tmpFs, SivaFSOptions{})
+}
+
+// NewFilesystemWithOptions creates an entire filesystem siva as the main
+// backend. It accepts options. See NewFilesystem documentation.
+func NewFilesystemWithOptions(
+	fs billy.Filesystem,
+	path string,
+	tmpFs billy.Filesystem,
+	o SivaFSOptions,
+) (SivaFS, error) {
 	tempdir := "/tmp"
 
-	root := New(fs, path)
+	if o.ReadOnly && o.Offset != 0 {
+		return nil, ErrOffsetReadWrite
+	}
+
+	root := NewWithOptions(fs, path, o)
+
+	if o.ReadOnly {
+		ro := &readOnly{
+			Filesystem: chroot.New(root, "/"),
+			SivaSync:   root,
+		}
+
+		return ro, nil
+	}
+
 	m := mount.New(root, tempdir, tmpFs)
 
 	t := &temp{
@@ -100,21 +143,10 @@ func NewFilesystemReadOnly(
 	path string,
 	offset uint64,
 ) (SivaFS, error) {
-	s := &sivaFS{
-		underlying: fs,
-		path:       path,
-		readOnly:   true,
-		offset:     offset,
-	}
-
-	ch := chroot.New(s, "/")
-
-	ro := &readOnly{
-		Filesystem: ch,
-		SivaSync:   s,
-	}
-
-	return ro, nil
+	return NewFilesystemWithOptions(fs, path, nil, SivaFSOptions{
+		ReadOnly: true,
+		Offset:   offset,
+	})
 }
 
 // Create creates a new file. This file is created using CREATE, TRUNCATE and
@@ -300,13 +332,13 @@ func (fs *sivaFS) ensureOpen() error {
 		return nil
 	}
 
-	if fs.readOnly {
+	if fs.options.ReadOnly {
 		f, err := fs.underlying.Open(fs.path)
 		if err != nil {
 			return err
 		}
 
-		r := siva.NewReaderWithOffset(f, fs.offset)
+		r := siva.NewReaderWithOffset(f, fs.options.Offset)
 
 		fs.r = r
 		fs.f = f
@@ -407,6 +439,10 @@ func (fs *sivaFS) getIndex() (siva.OrderedIndex, error) {
 	index, err := fs.r.Index()
 	if err != nil {
 		return nil, err
+	}
+
+	if fs.options.UnsafePaths {
+		return siva.OrderedIndex(index), nil
 	}
 
 	return siva.OrderedIndex(index.ToSafePaths()), nil
