@@ -414,20 +414,33 @@ func (f *Fixture) Path() string {
 }
 
 func (f *Fixture) FS(c *C, readOnly bool) billy.Filesystem {
+	fs, err := f.FSOffset(c, readOnly, 0)
+	c.Assert(err, IsNil)
+
+	return fs
+}
+
+func (f *Fixture) FSOffset(
+	c *C,
+	readOnly bool,
+	offset uint64,
+) (billy.Filesystem, error) {
 	tmp := c.MkDir()
 
 	err := copyFile(f.Path(), filepath.Join(tmp, f.name))
-	c.Assert(err, IsNil)
+	if err != nil {
+		return nil, err
+	}
 
 	options := SivaFSOptions{
 		UnsafePaths: f.unsafe,
 		ReadOnly:    readOnly,
+		Offset:      offset,
 	}
 
 	fs, err := NewFilesystemWithOptions(osfs.New(tmp), f.name, memfs.New(), options)
-	c.Assert(err, IsNil)
 
-	return fs
+	return fs, err
 }
 
 type ReadOnlyFilesystemSuite struct {
@@ -489,4 +502,20 @@ func (s *ReadOnlyFilesystemSuite) TestDir(c *C) {
 
 	err = fs.Remove("dir")
 	c.Assert(err, Equals, ErrReadOnlyFilesystem)
+}
+
+func (s *ReadOnlyFilesystemSuite) TestOffset(c *C) {
+	f := fixtures[0]
+
+	_, err := f.FSOffset(c, true, 0)
+	c.Assert(err, IsNil)
+
+	_, err = f.FSOffset(c, true, 10)
+	c.Assert(err, IsNil)
+
+	_, err = f.FSOffset(c, false, 0)
+	c.Assert(err, IsNil)
+
+	_, err = f.FSOffset(c, false, 10)
+	c.Assert(err, Equals, ErrOffsetReadWrite)
 }
