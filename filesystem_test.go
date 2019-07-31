@@ -97,7 +97,7 @@ func (s *FilesystemSuite) TestSyncWithOpenFile(c *C) {
 	c.Assert(err, IsNil)
 
 	n, err = f.Write([]byte("bar"))
-	c.Assert(err.(*os.PathError).Err, Equals, os.ErrClosed)
+	c.Assert(err, Equals, os.ErrClosed)
 	c.Assert(n, Equals, 0)
 
 	err = f.Close()

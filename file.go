@@ -82,7 +82,12 @@ func (f *file) Write(p []byte) (int, error) {
 		return 0, ErrReadOnlyFile
 	}
 
-	return f.w.Write(p)
+	n, err := f.w.Write(p)
+	if err == siva.ErrMissingHeader {
+		return 0, os.ErrClosed
+	}
+
+	return n, err
 }
 
 func (f *file) Close() error {
