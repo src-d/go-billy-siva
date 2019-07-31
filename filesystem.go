@@ -451,7 +451,7 @@ func (fs *sivaFS) getIndex() (siva.OrderedIndex, error) {
 func listFiles(index siva.OrderedIndex, dir string) ([]os.FileInfo, error) {
 	dir = addTrailingSlash(dir)
 
-	entries, err := siva.Index(index).Glob(fmt.Sprintf("%s*", dir))
+	entries, err := index.Glob(fmt.Sprintf("%s*", dir))
 	if err != nil {
 		return nil, err
 	}
