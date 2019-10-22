@@ -19,6 +19,7 @@ script:
   - make dependencies
   - make test-coverage
   - make codecov
+  - make test-race
 
 
 jobs:
