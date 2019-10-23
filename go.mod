@@ -5,3 +5,5 @@ require (
 	gopkg.in/src-d/go-billy.v4 v4.3.2
 	gopkg.in/src-d/go-siva.v1 v1.7.0
 )
+
+go 1.13

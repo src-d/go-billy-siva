@@ -7,6 +7,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -61,6 +62,8 @@ type SivaFSOptions struct {
 }
 
 type sivaFS struct {
+	mu sync.Mutex
+
 	underlying billy.Filesystem
 	path       string
 	f          billy.File
@@ -164,7 +167,7 @@ func (fs *sivaFS) OpenFile(path string, flag int, mode os.FileMode) (billy.File,
 		return nil, err
 	}
 
-	if fs.rw == nil && flag&(os.O_CREATE|os.O_TRUNC|os.O_WRONLY) != 0 {
+	if fs.getReadWriter() == nil && flag&(os.O_CREATE|os.O_TRUNC|os.O_WRONLY) != 0 {
 		return nil, ErrReadOnlyFilesystem
 	}
 
@@ -245,7 +248,7 @@ func (fs *sivaFS) MkdirAll(filename string, perm os.FileMode) error {
 		return err
 	}
 
-	if fs.rw == nil {
+	if fs.getReadWriter() == nil {
 		return ErrReadOnlyFilesystem
 	}
 
@@ -277,7 +280,7 @@ func (fs *sivaFS) Remove(path string) error {
 		return err
 	}
 
-	if fs.rw == nil {
+	if fs.getReadWriter() == nil {
 		return ErrReadOnlyFilesystem
 	}
 
@@ -289,7 +292,7 @@ func (fs *sivaFS) Remove(path string) error {
 	e := index.Find(path)
 
 	if e != nil {
-		return fs.rw.WriteHeader(&siva.Header{
+		return fs.getReadWriter().WriteHeader(&siva.Header{
 			Name:    path,
 			ModTime: time.Now(),
 			Mode:    0,
@@ -328,7 +331,7 @@ func (fs *sivaFS) Capabilities() billy.Capability {
 }
 
 func (fs *sivaFS) ensureOpen() error {
-	if fs.r != nil {
+	if fs.getReader() != nil {
 		return nil
 	}
 
@@ -340,7 +343,7 @@ func (fs *sivaFS) ensureOpen() error {
 
 		r := siva.NewReaderWithOffset(f, fs.options.Offset)
 
-		fs.r = r
+		fs.setReader(r)
 		fs.f = f
 		return nil
 	}
@@ -356,25 +359,53 @@ func (fs *sivaFS) ensureOpen() error {
 		return err
 	}
 
-	fs.rw = rw
-	fs.r = rw
+	fs.setReadWriter(rw)
+	fs.setReader(rw)
 	fs.f = f
 	return nil
 }
 
+func (fs *sivaFS) getReader() siva.Reader {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+
+	return fs.r
+}
+
+func (fs *sivaFS) setReader(r siva.Reader) {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+
+	fs.r = r
+}
+
+func (fs *sivaFS) getReadWriter() *siva.ReadWriter {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+
+	return fs.rw
+}
+
+func (fs *sivaFS) setReadWriter(rw *siva.ReadWriter) {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+
+	fs.rw = rw
+}
+
 func (fs *sivaFS) ensureClosed() error {
-	if fs.r == nil {
+	if fs.getReader() == nil {
 		return nil
 	}
 
-	if fs.rw != nil {
+	if fs.getReadWriter() != nil {
 		if err := fs.rw.Close(); err != nil {
 			return err
 		}
 	}
 
-	fs.rw = nil
-	fs.r = nil
+	fs.setReadWriter(nil)
+	fs.setReader(nil)
 
 	f := fs.f
 	fs.f = nil
@@ -392,12 +423,12 @@ func (fs *sivaFS) createFile(path string, flag int, mode os.FileMode) (billy.Fil
 		ModTime: time.Now(),
 	}
 
-	if err := fs.rw.WriteHeader(header); err != nil {
+	if err := fs.getReadWriter().WriteHeader(header); err != nil {
 		return nil, err
 	}
 
 	closeFunc := func() error {
-		if fs.rw == nil {
+		if fs.getReadWriter() == nil {
 			return nil
 		}
 
@@ -405,11 +436,11 @@ func (fs *sivaFS) createFile(path string, flag int, mode os.FileMode) (billy.Fil
 			fs.fileWriteModeOpen = false
 		}
 
-		return fs.rw.Flush()
+		return fs.getReadWriter().Flush()
 	}
 
 	defer func() { fs.fileWriteModeOpen = true }()
-	return newFile(path, fs.rw, closeFunc), nil
+	return newFile(path, fs.getReadWriter(), closeFunc), nil
 }
 
 func (fs *sivaFS) openFile(path string, flag int, mode os.FileMode) (billy.File, error) {
@@ -427,7 +458,7 @@ func (fs *sivaFS) openFile(path string, flag int, mode os.FileMode) (billy.File,
 		return nil, os.ErrNotExist
 	}
 
-	sr, err := fs.r.Get(e)
+	sr, err := fs.getReader().Get(e)
 	if err != nil {
 		return nil, err
 	}
@@ -436,7 +467,7 @@ func (fs *sivaFS) openFile(path string, flag int, mode os.FileMode) (billy.File,
 }
 
 func (fs *sivaFS) getIndex() (siva.OrderedIndex, error) {
-	index, err := fs.r.Index()
+	index, err := fs.getReader().Index()
 	if err != nil {
 		return nil, err
 	}
